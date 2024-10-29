@@ -40,6 +40,7 @@ const LiveDetection = () => {
         if (obj.status === "confirmed") {
           const itemName = obj.class;
           if (!newCart[itemName]) {
+            // New item detected
             newCart[itemName] = {
               quantity: 1,
               unit_price: 0,
@@ -53,8 +54,8 @@ const LiveDetection = () => {
                 [itemName]: 1,
               }));
             }
-          } else if (!manualAdjustments[itemName]) {
-            // Only increment if no manual adjustment exists
+          } else if (!manualAdjustments.hasOwnProperty(itemName)) {
+            // Changed this condition to explicitly check if the item has a manual adjustment
             newCart[itemName].quantity += 1;
 
             // Update original quantity
@@ -67,7 +68,7 @@ const LiveDetection = () => {
         }
       });
 
-      // Apply manual adjustments
+      // Apply manual adjustments only to existing items
       Object.entries(manualAdjustments).forEach(([itemName, quantity]) => {
         if (newCart[itemName]) {
           newCart[itemName].quantity = quantity;
@@ -78,6 +79,25 @@ const LiveDetection = () => {
     },
     [manualAdjustments, originalQuantities]
   );
+
+  // Add this function to clean up manual adjustments for removed items
+  const cleanupManualAdjustments = useCallback(() => {
+    const currentItems = new Set(Object.keys(confirmedObjects));
+    setManualAdjustments((prev) => {
+      const newAdjustments = {};
+      Object.entries(prev).forEach(([itemName, quantity]) => {
+        if (currentItems.has(itemName)) {
+          newAdjustments[itemName] = quantity;
+        }
+      });
+      return newAdjustments;
+    });
+  }, [confirmedObjects]);
+
+  // Add this useEffect to run the cleanup
+  useEffect(() => {
+    cleanupManualAdjustments();
+  }, [cleanupManualAdjustments]);
 
   const handleQuantityChange = (itemName, newQuantity) => {
     setManualAdjustments((prev) => ({
@@ -134,6 +154,12 @@ const LiveDetection = () => {
       );
 
       setTrackedObjects(data.tracked_objects || []);
+
+      // If frame is empty, clear manual adjustments for items that are no longer present
+      if (data.frame_status?.is_empty) {
+        cleanupManualAdjustments();
+      }
+
       updateShoppingCart(
         data.tracked_objects || [],
         data.confirmed_objects || {}
