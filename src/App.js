@@ -1,91 +1,6 @@
 import React, { useEffect, useRef, useState, useCallback } from "react";
 import io from "socket.io-client";
-import { motion, AnimatePresence } from "framer-motion";
-
-const QuantityAdjuster = ({
-  itemName,
-  currentQuantity,
-  originalQuantity,
-  unitPrice,
-  onAdjust,
-  onRequestAssistance,
-  onSpeak,
-  onReset,
-  isManuallyAdjusted,
-}) => {
-  const [isAdjusting, setIsAdjusting] = useState(false);
-
-  const handleAdjust = (newQuantity) => {
-    const change = newQuantity - currentQuantity;
-    const decreaseAmount = -change * unitPrice;
-
-    if (newQuantity < originalQuantity && decreaseAmount > 5) {
-      onRequestAssistance(itemName, currentQuantity, newQuantity);
-      return;
-    }
-
-    if (newQuantity !== currentQuantity) {
-      onAdjust(itemName, newQuantity);
-    }
-  };
-
-  const startAdjusting = () => {
-    setIsAdjusting(true);
-    onSpeak(
-      "You're trying to change the quantity of this item. Please note that this scanning session will be recorded to ensure the integrity of the process."
-    );
-  };
-
-  return (
-    <div className="flex items-center space-x-2">
-      {!isAdjusting ? (
-        <div className="flex items-center space-x-2">
-          <button
-            onClick={startAdjusting}
-            className="text-blue-600 hover:text-blue-800"
-          >
-            Adjust
-          </button>
-          {isManuallyAdjusted && (
-            <button
-              onClick={() => {
-                onReset(itemName);
-                onSpeak("Quantity reset to automatic detection.");
-              }}
-              className="text-xs text-gray-500 hover:text-gray-700"
-              title="Reset to detected quantity"
-            >
-              Reset
-            </button>
-          )}
-        </div>
-      ) : (
-        <div className="flex items-center space-x-2">
-          <button
-            onClick={() => handleAdjust(currentQuantity - 1)}
-            className="p-1 text-gray-600 hover:text-gray-800"
-            disabled={currentQuantity <= 0}
-          >
-            -
-          </button>
-          <span className="min-w-[2rem] text-center">{currentQuantity}</span>
-          <button
-            onClick={() => handleAdjust(currentQuantity + 1)}
-            className="p-1 text-gray-600 hover:text-gray-800"
-          >
-            +
-          </button>
-          <button
-            onClick={() => setIsAdjusting(false)}
-            className="ml-2 text-sm text-gray-500 hover:text-gray-700"
-          >
-            Done
-          </button>
-        </div>
-      )}
-    </div>
-  );
-};
+import ShoppingCartSection from "./components/ShoppingCartSection";
 
 const LiveDetection = () => {
   const canvasRef = useRef(null);
@@ -104,120 +19,47 @@ const LiveDetection = () => {
     empty_confidence: 1.0,
   });
   const [processingItems, setProcessingItems] = useState(new Set());
-  const [showAssistanceModal, setShowAssistanceModal] = useState(false);
-  const [adjustmentMessage, setAdjustmentMessage] = useState("");
-  const [originalQuantities, setOriginalQuantities] = useState({});
-  const [manualAdjustments, setManualAdjustments] = useState({});
+  const [assistantNeeded, setAssistantNeeded] = useState(false);
 
   let frameCount = 0;
   let lastTime = Date.now();
 
-  //const BACKEND_URL = "https://192.168.137.154:5000";
-  const BACKEND_URL = "https://172.20.10.2:5000";
-  // Update the updateShoppingCart function to respect manual adjustments
-  const updateShoppingCart = useCallback(
-    (tracked, confirmed) => {
-      const newCart = { ...confirmed };
+  const BACKEND_URL = "https://192.168.137.154:5000";
 
-      // First, process the confirmed detections
-      tracked.forEach((obj) => {
-        if (obj.status === "confirmed") {
-          const itemName = obj.class;
-          // Only update quantities for items that haven't been manually adjusted
-          if (!manualAdjustments[itemName]) {
-            if (!newCart[itemName]) {
-              newCart[itemName] = {
-                quantity: 1,
-                unit_price: 0,
-                image_path: "",
-              };
-              // Store original quantity
-              setOriginalQuantities((prev) => ({
-                ...prev,
-                [itemName]: 1,
-              }));
-            } else {
-              newCart[itemName].quantity += 1;
-              setOriginalQuantities((prev) => ({
-                ...prev,
-                [itemName]: (prev[itemName] || 0) + 1,
-              }));
-            }
-            lastConfirmedTimeRef.current[obj.id] = Date.now();
-          }
-        }
-      });
-
-      // Preserve manually adjusted quantities
-      Object.entries(manualAdjustments).forEach(([itemName, quantity]) => {
-        if (newCart[itemName]) {
+  const updateShoppingCart = useCallback((tracked, confirmed) => {
+    const newCart = { ...confirmed };
+    tracked.forEach((obj) => {
+      if (obj.status === "confirmed") {
+        const itemName = obj.class;
+        if (!newCart[itemName]) {
           newCart[itemName] = {
-            ...newCart[itemName],
-            quantity: quantity,
+            quantity: 1,
+            unit_price: 0,
+            image_path: "",
           };
+        } else {
+          newCart[itemName].quantity += 1;
         }
-      });
+        lastConfirmedTimeRef.current[obj.id] = Date.now();
+      }
+    });
+    setConfirmedObjects(newCart);
+  }, []);
 
-      setConfirmedObjects(newCart);
-    },
-    [manualAdjustments]
-  );
-
-  // Update the handleQuantityAdjust function in LiveDetection
-  const handleQuantityAdjust = (itemName, newQuantity) => {
-    const item = confirmedObjects[itemName];
-    const originalQuantity = originalQuantities[itemName];
-
-    if (newQuantity < item.quantity) {
-      // Reducing quantity
-      speakInstruction(
-        "Please ensure you have returned the item to its original location. Random audits may be conducted to verify inventory accuracy."
-      );
-    }
-
-    // Store the manual adjustment
-    setManualAdjustments((prev) => ({
-      ...prev,
-      [itemName]: newQuantity,
-    }));
-
+  const handleQuantityChange = (itemName, newQuantity) => {
     setConfirmedObjects((prev) => ({
       ...prev,
       [itemName]: {
         ...prev[itemName],
         quantity: newQuantity,
-        _previousQuantity: item.quantity,
       },
     }));
-
-    // Recalculate total price
-    const updatedTotal = Object.entries({
-      ...confirmedObjects,
-      [itemName]: { ...item, quantity: newQuantity },
-    }).reduce(
-      (sum, [_, item]) => sum + item.quantity * (item.unit_price || 0),
-      0
-    );
-    setTotalPrice(updatedTotal);
   };
 
-  // Add a function to reset manual adjustment if needed
-  const resetManualAdjustment = (itemName) => {
-    setManualAdjustments((prev) => {
-      const newAdjustments = { ...prev };
-      delete newAdjustments[itemName];
-      return newAdjustments;
-    });
-  };
-
-  const handleRequestAssistance = (itemName, currentQty, requestedQty) => {
-    setAdjustmentMessage(
-      `Assistance needed: Customer wants to reduce ${itemName} quantity from ${currentQty} to ${requestedQty}. This exceeds the $5 limit for self-service adjustments.`
-    );
-    setShowAssistanceModal(true);
-    speakInstruction(
-      "This adjustment requires assistance. An associate will be with you shortly."
-    );
+  const callAssistant = (reason) => {
+    setAssistantNeeded(true);
+    // You can implement additional assistant notification logic here
+    console.log("Assistant needed:", reason);
   };
 
   useEffect(() => {
@@ -293,7 +135,6 @@ const LiveDetection = () => {
       lastInstructionRef.current = newInstruction;
     }
 
-    // Calculate total price whenever confirmedObjects changes
     const total = Object.entries(confirmedObjects).reduce(
       (sum, [_, item]) => sum + item.quantity * (item.unit_price || 0),
       0
@@ -558,6 +399,7 @@ const LiveDetection = () => {
       lastTime = currentTime;
     }
   };
+
   const handleCheckout = () => {
     console.log("Proceed to checkout");
   };
@@ -579,104 +421,14 @@ const LiveDetection = () => {
           </div>
           <div className="mt-2">FPS: {fps}</div>
         </div>
-        <div className="w-1/2 p-4 flex flex-col">
-          <h2 className="text-2xl font-bold mb-4">Shopping Cart</h2>
-          <div className="flex-grow overflow-auto">
-            <table className="w-full border-collapse">
-              <thead>
-                <tr className="bg-gray-200">
-                  <th className="p-2">Image</th>
-                  <th className="p-2">Item Name</th>
-                  <th className="p-2">Quantity</th>
-                  <th className="p-2">Unit Price</th>
-                  <th className="p-2">Total Price</th>
-                </tr>
-              </thead>
-              <tbody>
-                <AnimatePresence>
-                  {Object.entries(confirmedObjects).map(([itemName, item]) => (
-                    <motion.tr
-                      key={itemName}
-                      initial={{ opacity: 0, y: -20 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      exit={{ opacity: 0, y: 20 }}
-                      transition={{ duration: 0.3 }}
-                      className="border-b"
-                    >
-                      <td className="p-2">
-                        <img
-                          src={`${BACKEND_URL}/Assets/${item.image_path
-                            .split("/")
-                            .pop()}`}
-                          alt={itemName}
-                          className="w-16 h-16 object-cover rounded-lg"
-                        />
-                      </td>
-                      <td className="p-2 font-medium">{itemName}</td>
-                      <td className="p-2 text-center">
-                        <QuantityAdjuster
-                          itemName={itemName}
-                          currentQuantity={item.quantity}
-                          originalQuantity={originalQuantities[itemName]}
-                          unitPrice={item.unit_price}
-                          onAdjust={handleQuantityAdjust}
-                          onRequestAssistance={handleRequestAssistance}
-                          onSpeak={speakInstruction}
-                          onReset={resetManualAdjustment}
-                          isManuallyAdjusted={Boolean(
-                            manualAdjustments[itemName]
-                          )}
-                        />
-                      </td>
-                      <td className="p-2 text-right">
-                        ${item.unit_price?.toFixed(2) || "N/A"}
-                      </td>
-                      <td className="p-2 text-right font-medium">
-                        ${(item.quantity * (item.unit_price || 0)).toFixed(2)}
-                      </td>
-                    </motion.tr>
-                  ))}
-                </AnimatePresence>
-              </tbody>
-
-              {/* Assistance Modal */}
-              {showAssistanceModal && (
-                <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center">
-                  <div className="bg-white p-6 rounded-lg max-w-md">
-                    <h3 className="text-lg font-bold mb-4">
-                      Assistance Required
-                    </h3>
-                    <p className="mb-4">{adjustmentMessage}</p>
-                    <button
-                      onClick={() => setShowAssistanceModal(false)}
-                      className="bg-blue-500 text-white px-4 py-2 rounded hover:bg-blue-600"
-                    >
-                      OK
-                    </button>
-                  </div>
-                </div>
-              )}
-            </table>
-          </div>
-          <div className="mt-4 p-4 bg-white rounded-lg shadow-sm">
-            <div className="text-xl font-bold text-right">
-              Total: ${totalPrice.toFixed(2)}
-            </div>
-            <button
-              onClick={handleCheckout}
-              disabled={undeterminedObjects.length > 0}
-              className={`mt-4 w-full p-3 text-white font-bold rounded-lg transition-all duration-200 ${
-                undeterminedObjects.length > 0
-                  ? "bg-gray-400 cursor-not-allowed"
-                  : "bg-blue-500 hover:bg-blue-600 active:bg-blue-700"
-              }`}
-            >
-              {undeterminedObjects.length > 0
-                ? "Please wait for all items to be confirmed"
-                : "Proceed to Checkout"}
-            </button>
-          </div>
-        </div>
+        <ShoppingCartSection
+          confirmedObjects={confirmedObjects}
+          undeterminedObjects={undeterminedObjects}
+          totalPrice={totalPrice}
+          BACKEND_URL={BACKEND_URL}
+          onQuantityChange={handleQuantityChange}
+          handleCheckout={handleCheckout}
+        />
       </div>
     </div>
   );
