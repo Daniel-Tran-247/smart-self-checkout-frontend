@@ -20,39 +20,69 @@ const LiveDetection = () => {
   });
   const [processingItems, setProcessingItems] = useState(new Set());
   const [assistantNeeded, setAssistantNeeded] = useState(false);
+  // Add new state for manual quantity adjustments
+  const [manualAdjustments, setManualAdjustments] = useState({});
+  // Track original quantities when items are first confirmed
+  const [originalQuantities, setOriginalQuantities] = useState({});
 
   let frameCount = 0;
   let lastTime = Date.now();
 
   const BACKEND_URL = "https://192.168.137.154:5000";
 
-  const updateShoppingCart = useCallback((tracked, confirmed) => {
-    const newCart = { ...confirmed };
-    tracked.forEach((obj) => {
-      if (obj.status === "confirmed") {
-        const itemName = obj.class;
-        if (!newCart[itemName]) {
-          newCart[itemName] = {
-            quantity: 1,
-            unit_price: 0,
-            image_path: "",
-          };
-        } else {
-          newCart[itemName].quantity += 1;
+  // Modified updateShoppingCart function
+  const updateShoppingCart = useCallback(
+    (tracked, confirmed) => {
+      const newCart = { ...confirmed };
+
+      // Update quantities based on detection
+      tracked.forEach((obj) => {
+        if (obj.status === "confirmed") {
+          const itemName = obj.class;
+          if (!newCart[itemName]) {
+            newCart[itemName] = {
+              quantity: 1,
+              unit_price: 0,
+              image_path: "",
+            };
+
+            // Store original quantity when item is first confirmed
+            if (!originalQuantities[itemName]) {
+              setOriginalQuantities((prev) => ({
+                ...prev,
+                [itemName]: 1,
+              }));
+            }
+          } else if (!manualAdjustments[itemName]) {
+            // Only increment if no manual adjustment exists
+            newCart[itemName].quantity += 1;
+
+            // Update original quantity
+            setOriginalQuantities((prev) => ({
+              ...prev,
+              [itemName]: (prev[itemName] || 0) + 1,
+            }));
+          }
+          lastConfirmedTimeRef.current[obj.id] = Date.now();
         }
-        lastConfirmedTimeRef.current[obj.id] = Date.now();
-      }
-    });
-    setConfirmedObjects(newCart);
-  }, []);
+      });
+
+      // Apply manual adjustments
+      Object.entries(manualAdjustments).forEach(([itemName, quantity]) => {
+        if (newCart[itemName]) {
+          newCart[itemName].quantity = quantity;
+        }
+      });
+
+      setConfirmedObjects(newCart);
+    },
+    [manualAdjustments, originalQuantities]
+  );
 
   const handleQuantityChange = (itemName, newQuantity) => {
-    setConfirmedObjects((prev) => ({
+    setManualAdjustments((prev) => ({
       ...prev,
-      [itemName]: {
-        ...prev[itemName],
-        quantity: newQuantity,
-      },
+      [itemName]: newQuantity,
     }));
   };
 
@@ -428,6 +458,8 @@ const LiveDetection = () => {
           BACKEND_URL={BACKEND_URL}
           onQuantityChange={handleQuantityChange}
           handleCheckout={handleCheckout}
+          originalQuantities={originalQuantities}
+          manualAdjustments={manualAdjustments}
         />
       </div>
     </div>

@@ -5,6 +5,7 @@ const QuantityAdjuster = ({
   currentQuantity,
   unitPrice,
   onQuantityChange,
+  originalQuantity,
 }) => {
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [newQuantity, setNewQuantity] = useState(currentQuantity);
@@ -12,31 +13,27 @@ const QuantityAdjuster = ({
 
   const handleQuantityChange = (delta) => {
     const proposedQuantity = currentQuantity + delta;
-    const priceDifference = (currentQuantity - proposedQuantity) * unitPrice;
 
+    // Check if reducing below original quantity
     if (delta < 0) {
-      // Reducing quantity
+      const reducedQuantity = originalQuantity - proposedQuantity;
+      const priceDifference = reducedQuantity * unitPrice;
+
       if (proposedQuantity < 0) {
         return; // Prevent negative quantities
       }
 
       if (priceDifference > 5) {
-        // Show assistant needed message
         alert(
           "Please wait for assistance. An associate will help you with this quantity reduction."
         );
         return;
       }
-
-      setNewQuantity(proposedQuantity);
-      setAction("reduce");
-      setIsDialogOpen(true);
-    } else {
-      // Increasing quantity
-      setNewQuantity(proposedQuantity);
-      setAction("increase");
-      setIsDialogOpen(true);
     }
+
+    setNewQuantity(proposedQuantity);
+    setAction(delta < 0 ? "reduce" : "increase");
+    setIsDialogOpen(true);
   };
 
   const confirmChange = () => {
