@@ -28,25 +28,43 @@ const LiveDetection = () => {
 
   const BACKEND_URL = "https://192.168.137.154:5000";
 
-  const updateShoppingCart = useCallback((tracked, confirmed) => {
-    const newCart = { ...confirmed };
-    tracked.forEach((obj) => {
-      if (obj.status === "confirmed") {
-        const itemName = obj.class;
-        if (!newCart[itemName]) {
-          newCart[itemName] = {
-            quantity: 1,
-            unit_price: 0,
-            image_path: "",
-          };
-        } else {
-          newCart[itemName].quantity += 1;
+  const updateShoppingCart = useCallback(
+    (tracked, confirmed) => {
+      const newCart = { ...confirmed };
+
+      // First, handle tracked confirmations
+      tracked.forEach((obj) => {
+        if (obj.status === "confirmed") {
+          const itemName = obj.class;
+          if (!newCart[itemName]) {
+            newCart[itemName] = {
+              quantity: 1,
+              unit_price: 0,
+              image_path: "",
+            };
+          } else {
+            newCart[itemName].quantity += 1;
+          }
+          lastConfirmedTimeRef.current[obj.id] = Date.now();
         }
-        lastConfirmedTimeRef.current[obj.id] = Date.now();
-      }
-    });
-    setConfirmedObjects(newCart);
-  }, []);
+      });
+
+      // Then, apply manual quantity overrides
+      Object.entries(manualQuantities).forEach(([itemName, manualQty]) => {
+        if (newCart[itemName]) {
+          // If the item exists in cart and has a manual override
+          const difference = manualQty - baselineQuantities[itemName];
+          newCart[itemName].quantity =
+            baselineQuantities[itemName] +
+            difference +
+            (newCart[itemName].quantity - baselineQuantities[itemName]);
+        }
+      });
+
+      setConfirmedObjects(newCart);
+    },
+    [manualQuantities, baselineQuantities]
+  );
 
   useEffect(() => {
     socketRef.current = io(BACKEND_URL, {
@@ -125,9 +143,10 @@ const LiveDetection = () => {
   }, [confirmedObjects]);
 
   const handleQuantityChange = (itemName, newQuantity) => {
+    const difference = newQuantity - baselineQuantities[itemName];
     setManualQuantities((prev) => ({
       ...prev,
-      [itemName]: newQuantity,
+      [itemName]: baselineQuantities[itemName] + difference,
     }));
   };
 
