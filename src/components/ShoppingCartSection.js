@@ -41,3 +41,5 @@ const ShoppingCartTable = ({ confirmedObjects, onQuantityChange }) => {
     </table>
   );
 };
+
+export default ShoppingCartTable;

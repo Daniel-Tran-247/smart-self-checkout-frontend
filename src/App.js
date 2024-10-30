@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState, useCallback } from "react";
 import io from "socket.io-client";
 import { motion, AnimatePresence } from "framer-motion";
+import QuantityAdjuster from "./components/QuantityAdjuster";
 
 const LiveDetection = () => {
   const canvasRef = useRef(null);
@@ -19,9 +20,8 @@ const LiveDetection = () => {
     empty_confidence: 1.0,
   });
   const [processingItems, setProcessingItems] = useState(new Set());
-  const [isAdjustingQuantity, setIsAdjustingQuantity] = useState(false);
-  const [selectedItem, setSelectedItem] = useState(null);
-  const [originalQuantities, setOriginalQuantities] = useState({});
+  const [manualQuantities, setManualQuantities] = useState({});
+  const [baselineQuantities, setBaselineQuantities] = useState({});
 
   let frameCount = 0;
   let lastTime = Date.now();
@@ -114,6 +114,24 @@ const LiveDetection = () => {
   }, [updateShoppingCart]);
 
   useEffect(() => {
+    Object.entries(confirmedObjects).forEach(([itemName, item]) => {
+      if (!baselineQuantities[itemName]) {
+        setBaselineQuantities((prev) => ({
+          ...prev,
+          [itemName]: item.quantity,
+        }));
+      }
+    });
+  }, [confirmedObjects]);
+
+  const handleQuantityChange = (itemName, newQuantity) => {
+    setManualQuantities((prev) => ({
+      ...prev,
+      [itemName]: newQuantity,
+    }));
+  };
+
+  useEffect(() => {
     const newInstruction = getContextualInstructions();
     if (newInstruction !== lastInstructionRef.current) {
       setInstruction(newInstruction);
@@ -127,58 +145,6 @@ const LiveDetection = () => {
     );
     setTotalPrice(total);
   }, [confirmedObjects, undeterminedObjects, trackedObjects]);
-
-  const handleQuantityAdjustment = (itemName) => {
-    setIsAdjustingQuantity(true);
-    setSelectedItem(itemName);
-    // Store original quantity as baseline
-    setOriginalQuantities((prev) => ({
-      ...prev,
-      [itemName]: confirmedObjects[itemName].quantity,
-    }));
-
-    // Announce quantity adjustment mode
-    setInstruction(
-      "You're trying to change the quantity of this item. Please note that this scanning session will be recorded to ensure the integrity of the process."
-    );
-  };
-  const updateQuantity = (itemName, newQuantity) => {
-    const item = confirmedObjects[itemName];
-    const originalQuantity = originalQuantities[itemName];
-    const quantityDiff = originalQuantity - newQuantity;
-    const priceDiff = quantityDiff * item.unit_price;
-
-    if (newQuantity < originalQuantity) {
-      // Reducing quantity
-      if (priceDiff <= 5) {
-        setConfirmedObjects((prev) => ({
-          ...prev,
-          [itemName]: {
-            ...prev[itemName],
-            quantity: newQuantity,
-          },
-        }));
-        setInstruction(
-          "Please ensure you have returned the removed items. Random audit may occur to verify this action."
-        );
-      } else {
-        // Trigger help for reductions over $5
-        setInstruction(
-          "This reduction requires assistance. An associate will be with you shortly."
-        );
-        // Add help button logic here
-      }
-    } else {
-      // Increasing quantity or reducing to baseline
-      setConfirmedObjects((prev) => ({
-        ...prev,
-        [itemName]: {
-          ...prev[itemName],
-          quantity: newQuantity,
-        },
-      }));
-    }
-  };
 
   const getContextualInstructions = () => {
     const itemsInFrame = trackedObjects.filter(
@@ -461,10 +427,64 @@ const LiveDetection = () => {
         <div className="w-1/2 p-4 flex flex-col">
           <h2 className="text-2xl font-bold mb-4">Shopping Cart</h2>
           <div className="flex-grow overflow-auto">
-            <ShoppingCartTable
-              confirmedObjects={confirmedObjects}
-              onQuantityChange={updateQuantity}
-            />
+            <table className="w-full border-collapse">
+              <thead>
+                <tr className="bg-gray-200">
+                  <th className="p-2">Image</th>
+                  <th className="p-2">Item Name</th>
+                  <th className="p-2">Quantity</th>
+                  <th className="p-2">Unit Price</th>
+                  <th className="p-2">Total Price</th>
+                </tr>
+              </thead>
+              <tbody>
+                <AnimatePresence>
+                  {Object.entries(confirmedObjects).map(([itemName, item]) => (
+                    <motion.tr
+                      key={itemName}
+                      initial={{ opacity: 0, y: -20 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      exit={{ opacity: 0, y: 20 }}
+                      transition={{ duration: 0.3 }}
+                      className="border-b"
+                    >
+                      <td className="p-2">
+                        <img
+                          src={`${BACKEND_URL}/Assets/${item.image_path
+                            .split("/")
+                            .pop()}`}
+                          alt={itemName}
+                          className="w-16 h-16 object-cover rounded-lg"
+                        />
+                      </td>
+                      <td className="p-2 font-medium">{itemName}</td>
+                      <td className="p-2 text-center">
+                        <QuantityAdjuster
+                          itemName={itemName}
+                          currentQuantity={
+                            manualQuantities[itemName] ?? item.quantity
+                          }
+                          unitPrice={item.unit_price}
+                          onQuantityChange={handleQuantityChange}
+                          baselineQuantity={baselineQuantities[itemName]}
+                          isScanning={trackedObjects.length > 0}
+                        />
+                      </td>
+                      <td className="p-2 text-right">
+                        ${item.unit_price?.toFixed(2) || "N/A"}
+                      </td>
+                      <td className="p-2 text-right font-medium">
+                        $
+                        {(
+                          (manualQuantities[itemName] ?? item.quantity) *
+                          (item.unit_price || 0)
+                        ).toFixed(2)}
+                      </td>
+                    </motion.tr>
+                  ))}
+                </AnimatePresence>
+              </tbody>
+            </table>
           </div>
           <div className="mt-4 p-4 bg-white rounded-lg shadow-sm">
             <div className="text-xl font-bold text-right">
