@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState, useCallback } from "react";
 import io from "socket.io-client";
 import { motion, AnimatePresence } from "framer-motion";
+import CartReview from "./components/CartReview";
 
 const LiveDetection = () => {
   const canvasRef = useRef(null);
