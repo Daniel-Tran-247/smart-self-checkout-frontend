@@ -1,5 +1,11 @@
-import React, { useState } from "react";
-import { MinusCircle, PlusCircle, HelpCircle, AlertCircle } from "lucide-react";
+import React, { useState, useEffect } from "react";
+import {
+  MinusCircle,
+  PlusCircle,
+  HelpCircle,
+  AlertCircle,
+  Plus,
+} from "lucide-react";
 
 const PRICE_REDUCTION_LIMIT = 5.0;
 
@@ -15,9 +21,9 @@ const CartReview = ({
   const [alertConfig, setAlertConfig] = useState({});
   const [originalQuantities, setOriginalQuantities] = useState({});
   const [modifiedCart, setModifiedCart] = useState(confirmedObjects);
+  const [showAddItemsPrompt, setShowAddItemsPrompt] = useState(false);
 
-  // Initialize original quantities when component mounts
-  React.useEffect(() => {
+  useEffect(() => {
     const originals = {};
     Object.entries(confirmedObjects).forEach(([itemName, item]) => {
       originals[itemName] = item.quantity;
@@ -30,44 +36,48 @@ const CartReview = ({
     setIsEditing(!isEditing);
   };
 
-  const calculatePriceChange = (itemName, newQuantity) => {
-    const item = modifiedCart[itemName];
-    const quantityDiff = newQuantity - item.quantity;
-    return quantityDiff * item.unit_price;
-  };
-
   const calculateTotalReductionValue = (itemName, newQuantity) => {
-    const item = modifiedCart[itemName];
     const originalQuantity = originalQuantities[itemName];
-    const currentQuantity = item.quantity;
+    const item = modifiedCart[itemName];
 
-    if (newQuantity >= originalQuantity) return 0;
-
-    const reductionQuantity = currentQuantity - newQuantity;
-    return reductionQuantity * item.unit_price;
+    // If new quantity is less than original, calculate total reduction value
+    if (newQuantity < originalQuantity) {
+      const totalReduction = (originalQuantity - newQuantity) * item.unit_price;
+      return totalReduction;
+    }
+    return 0;
   };
 
   const handleQuantityChange = (itemName, newQuantity) => {
     const item = modifiedCart[itemName];
     const isReduction = newQuantity < item.quantity;
-    const reductionValue = calculateTotalReductionValue(itemName, newQuantity);
 
-    if (isReduction && reductionValue > PRICE_REDUCTION_LIMIT) {
-      setAlertConfig({
-        title: "Assistance Required",
-        description:
-          "The requested reduction exceeds our self-service limit of $5.00. An assistant will be called to help you.",
-        showHelp: true,
-        action: () => {
-          onRequestHelp();
-          setShowAlert(false);
-        },
-      });
-      setShowAlert(true);
-      return;
-    }
+    // Calculate total reduction from original quantity
+    const totalReductionValue = calculateTotalReductionValue(
+      itemName,
+      newQuantity
+    );
 
     if (isReduction) {
+      // Check if total reduction exceeds limit
+      if (totalReductionValue > PRICE_REDUCTION_LIMIT) {
+        setAlertConfig({
+          title: "Assistance Required",
+          description: `The total reduction value of $${totalReductionValue.toFixed(
+            2
+          )} exceeds our self-service limit of $${PRICE_REDUCTION_LIMIT.toFixed(
+            2
+          )}. An assistant will be called to help you.`,
+          showHelp: true,
+          action: () => {
+            onRequestHelp();
+            setShowAlert(false);
+          },
+        });
+        setShowAlert(true);
+        return;
+      }
+
       setAlertConfig({
         title: "Confirm Quantity Reduction",
         description:
@@ -93,8 +103,11 @@ const CartReview = ({
     }));
   };
 
+  const handleAddMoreItems = () => {
+    setShowAddItemsPrompt(true);
+  };
+
   const handleConfirm = () => {
-    // Apply all modifications to the parent component
     Object.entries(modifiedCart).forEach(([itemName, item]) => {
       onUpdateQuantity(itemName, item.quantity);
     });
@@ -107,10 +120,11 @@ const CartReview = ({
         <h2 className="text-2xl font-bold text-gray-800">Review Your Cart</h2>
         <div className="flex gap-3">
           <button
-            onClick={onBack}
-            className="px-4 py-2 rounded-lg bg-gray-100 text-gray-700 hover:bg-gray-200"
+            onClick={handleAddMoreItems}
+            className="px-4 py-2 rounded-lg bg-green-500 text-white hover:bg-green-600 flex items-center gap-2"
           >
-            Back to Scanning
+            <Plus className="w-5 h-5" />
+            Add More Items
           </button>
           <button
             onClick={handleEditToggle}
@@ -146,6 +160,11 @@ const CartReview = ({
             </div>
 
             <div className="flex items-center space-x-6">
+              {isEditing && (
+                <div className="text-sm text-gray-500">
+                  Original: {originalQuantities[itemName]}
+                </div>
+              )}
               {isEditing ? (
                 <div className="flex items-center space-x-3">
                   <button
@@ -224,6 +243,33 @@ const CartReview = ({
                 className="px-4 py-2 rounded-lg bg-blue-500 text-white hover:bg-blue-600"
               >
                 {alertConfig.showHelp ? "Request Assistance" : "Confirm"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {showAddItemsPrompt && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+          <div className="bg-white rounded-lg max-w-md w-full p-6">
+            <h3 className="text-lg font-semibold mb-4">Add More Items</h3>
+            <p className="text-gray-600 mb-6">
+              To add more items, you'll need to: 1. Complete this transaction
+              first 2. Start a new scanning session for additional items Would
+              you like to complete this transaction now?
+            </p>
+            <div className="flex justify-end space-x-3">
+              <button
+                onClick={() => setShowAddItemsPrompt(false)}
+                className="px-4 py-2 rounded-lg bg-gray-100 text-gray-700 hover:bg-gray-200"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleConfirm}
+                className="px-4 py-2 rounded-lg bg-green-500 text-white hover:bg-green-600"
+              >
+                Complete Transaction
               </button>
             </div>
           </div>
