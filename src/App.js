@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState, useCallback } from "react";
 import io from "socket.io-client";
-import ShoppingCartSection from "./components/ShoppingCartSection";
+import { motion, AnimatePresence } from "framer-motion";
 
 const LiveDetection = () => {
   const canvasRef = useRef(null);
@@ -19,10 +19,8 @@ const LiveDetection = () => {
     empty_confidence: 1.0,
   });
   const [processingItems, setProcessingItems] = useState(new Set());
-  const [assistantNeeded, setAssistantNeeded] = useState(false);
-  // Add new state for manual quantity adjustments
-  const [manualAdjustments, setManualAdjustments] = useState({});
-  // Track original quantities when items are first confirmed
+  const [isAdjustingQuantity, setIsAdjustingQuantity] = useState(false);
+  const [selectedItem, setSelectedItem] = useState(null);
   const [originalQuantities, setOriginalQuantities] = useState({});
 
   let frameCount = 0;
@@ -30,87 +28,25 @@ const LiveDetection = () => {
 
   const BACKEND_URL = "https://192.168.137.154:5000";
 
-  // Modified updateShoppingCart function
-  const updateShoppingCart = useCallback(
-    (tracked, confirmed) => {
-      const newCart = { ...confirmed };
-
-      // Update quantities based on detection
-      tracked.forEach((obj) => {
-        if (obj.status === "confirmed") {
-          const itemName = obj.class;
-          if (!newCart[itemName]) {
-            // New item detected
-            newCart[itemName] = {
-              quantity: 1,
-              unit_price: 0,
-              image_path: "",
-            };
-
-            // Store original quantity when item is first confirmed
-            if (!originalQuantities[itemName]) {
-              setOriginalQuantities((prev) => ({
-                ...prev,
-                [itemName]: 1,
-              }));
-            }
-          } else if (!manualAdjustments.hasOwnProperty(itemName)) {
-            // Changed this condition to explicitly check if the item has a manual adjustment
-            newCart[itemName].quantity += 1;
-
-            // Update original quantity
-            setOriginalQuantities((prev) => ({
-              ...prev,
-              [itemName]: (prev[itemName] || 0) + 1,
-            }));
-          }
-          lastConfirmedTimeRef.current[obj.id] = Date.now();
+  const updateShoppingCart = useCallback((tracked, confirmed) => {
+    const newCart = { ...confirmed };
+    tracked.forEach((obj) => {
+      if (obj.status === "confirmed") {
+        const itemName = obj.class;
+        if (!newCart[itemName]) {
+          newCart[itemName] = {
+            quantity: 1,
+            unit_price: 0,
+            image_path: "",
+          };
+        } else {
+          newCart[itemName].quantity += 1;
         }
-      });
-
-      // Apply manual adjustments only to existing items
-      Object.entries(manualAdjustments).forEach(([itemName, quantity]) => {
-        if (newCart[itemName]) {
-          newCart[itemName].quantity = quantity;
-        }
-      });
-
-      setConfirmedObjects(newCart);
-    },
-    [manualAdjustments, originalQuantities]
-  );
-
-  // Add this function to clean up manual adjustments for removed items
-  const cleanupManualAdjustments = useCallback(() => {
-    const currentItems = new Set(Object.keys(confirmedObjects));
-    setManualAdjustments((prev) => {
-      const newAdjustments = {};
-      Object.entries(prev).forEach(([itemName, quantity]) => {
-        if (currentItems.has(itemName)) {
-          newAdjustments[itemName] = quantity;
-        }
-      });
-      return newAdjustments;
+        lastConfirmedTimeRef.current[obj.id] = Date.now();
+      }
     });
-  }, [confirmedObjects]);
-
-  // Add this useEffect to run the cleanup
-  useEffect(() => {
-    cleanupManualAdjustments();
-  }, [cleanupManualAdjustments]);
-
-  const handleQuantityChange = (itemName, newQuantity) => {
-    setManualAdjustments((prev) => ({
-      ...prev,
-      [itemName]: newQuantity,
-    }));
-  };
-
-  const callAssistant = (reason) => {
-    setAssistantNeeded(true);
-    // You can implement additional assistant notification logic here
-    console.log("Assistant needed:", reason);
-  };
+    setConfirmedObjects(newCart);
+  }, []);
 
   useEffect(() => {
     socketRef.current = io(BACKEND_URL, {
@@ -154,12 +90,6 @@ const LiveDetection = () => {
       );
 
       setTrackedObjects(data.tracked_objects || []);
-
-      // If frame is empty, clear manual adjustments for items that are no longer present
-      if (data.frame_status?.is_empty) {
-        cleanupManualAdjustments();
-      }
-
       updateShoppingCart(
         data.tracked_objects || [],
         data.confirmed_objects || {}
@@ -197,6 +127,58 @@ const LiveDetection = () => {
     );
     setTotalPrice(total);
   }, [confirmedObjects, undeterminedObjects, trackedObjects]);
+
+  const handleQuantityAdjustment = (itemName) => {
+    setIsAdjustingQuantity(true);
+    setSelectedItem(itemName);
+    // Store original quantity as baseline
+    setOriginalQuantities((prev) => ({
+      ...prev,
+      [itemName]: confirmedObjects[itemName].quantity,
+    }));
+
+    // Announce quantity adjustment mode
+    setInstruction(
+      "You're trying to change the quantity of this item. Please note that this scanning session will be recorded to ensure the integrity of the process."
+    );
+  };
+  const updateQuantity = (itemName, newQuantity) => {
+    const item = confirmedObjects[itemName];
+    const originalQuantity = originalQuantities[itemName];
+    const quantityDiff = originalQuantity - newQuantity;
+    const priceDiff = quantityDiff * item.unit_price;
+
+    if (newQuantity < originalQuantity) {
+      // Reducing quantity
+      if (priceDiff <= 5) {
+        setConfirmedObjects((prev) => ({
+          ...prev,
+          [itemName]: {
+            ...prev[itemName],
+            quantity: newQuantity,
+          },
+        }));
+        setInstruction(
+          "Please ensure you have returned the removed items. Random audit may occur to verify this action."
+        );
+      } else {
+        // Trigger help for reductions over $5
+        setInstruction(
+          "This reduction requires assistance. An associate will be with you shortly."
+        );
+        // Add help button logic here
+      }
+    } else {
+      // Increasing quantity or reducing to baseline
+      setConfirmedObjects((prev) => ({
+        ...prev,
+        [itemName]: {
+          ...prev[itemName],
+          quantity: newQuantity,
+        },
+      }));
+    }
+  };
 
   const getContextualInstructions = () => {
     const itemsInFrame = trackedObjects.filter(
@@ -455,7 +437,6 @@ const LiveDetection = () => {
       lastTime = currentTime;
     }
   };
-
   const handleCheckout = () => {
     console.log("Proceed to checkout");
   };
@@ -477,16 +458,33 @@ const LiveDetection = () => {
           </div>
           <div className="mt-2">FPS: {fps}</div>
         </div>
-        <ShoppingCartSection
-          confirmedObjects={confirmedObjects}
-          undeterminedObjects={undeterminedObjects}
-          totalPrice={totalPrice}
-          BACKEND_URL={BACKEND_URL}
-          onQuantityChange={handleQuantityChange}
-          handleCheckout={handleCheckout}
-          originalQuantities={originalQuantities}
-          manualAdjustments={manualAdjustments}
-        />
+        <div className="w-1/2 p-4 flex flex-col">
+          <h2 className="text-2xl font-bold mb-4">Shopping Cart</h2>
+          <div className="flex-grow overflow-auto">
+            <ShoppingCartTable
+              confirmedObjects={confirmedObjects}
+              onQuantityChange={updateQuantity}
+            />
+          </div>
+          <div className="mt-4 p-4 bg-white rounded-lg shadow-sm">
+            <div className="text-xl font-bold text-right">
+              Total: ${totalPrice.toFixed(2)}
+            </div>
+            <button
+              onClick={handleCheckout}
+              disabled={undeterminedObjects.length > 0}
+              className={`mt-4 w-full p-3 text-white font-bold rounded-lg transition-all duration-200 ${
+                undeterminedObjects.length > 0
+                  ? "bg-gray-400 cursor-not-allowed"
+                  : "bg-blue-500 hover:bg-blue-600 active:bg-blue-700"
+              }`}
+            >
+              {undeterminedObjects.length > 0
+                ? "Please wait for all items to be confirmed"
+                : "Proceed to Checkout"}
+            </button>
+          </div>
+        </div>
       </div>
     </div>
   );
