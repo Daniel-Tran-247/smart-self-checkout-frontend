@@ -24,6 +24,8 @@ const LiveDetection = () => {
   const [baselineQuantities, setBaselineQuantities] = useState({});
   const [isReviewMode, setIsReviewMode] = useState(false);
   const [originalQuantities, setOriginalQuantities] = useState({});
+  const REVIEW_MODE_INSTRUCTION =
+    "You are now in review mode. You can adjust item quantities if needed. Please note that quantity reductions may require staff assistance depending on the total value.";
 
   let frameCount = 0;
   let lastTime = Date.now();
@@ -438,17 +440,8 @@ const LiveDetection = () => {
     if (socketRef.current) {
       socketRef.current.disconnect();
     }
-  };
-
-  const exitReviewMode = () => {
-    setIsReviewMode(false);
-    // Reset all quantity-related states
-    setManualQuantities({});
-    setBaselineQuantities({});
-    // Reconnect socket
-    if (socketRef.current) {
-      socketRef.current.connect();
-    }
+    // Set review mode instruction
+    setInstruction(REVIEW_MODE_INSTRUCTION);
   };
 
   // Modify the handleCheckout function
@@ -544,30 +537,35 @@ const LiveDetection = () => {
             </table>
           </div>
           <div className="mt-4 p-4 bg-white rounded-lg shadow-sm">
-            <div className="text-xl font-bold text-right">
+            <div className="text-xl font-bold text-right mb-2">
               Total: ${totalPrice.toFixed(2)}
             </div>
-            <button
-              onClick={handleCheckout}
-              disabled={undeterminedObjects.length > 0}
-              className={`mt-4 w-full p-3 text-white font-bold rounded-lg transition-all duration-200 ${
-                undeterminedObjects.length > 0
-                  ? "bg-gray-400 cursor-not-allowed"
-                  : "bg-blue-500 hover:bg-blue-600 active:bg-blue-700"
-              }`}
-            >
-              {undeterminedObjects.length > 0
-                ? "Please wait for all items to be confirmed"
-                : isReviewMode
-                ? "Proceed to Payment"
-                : "Review Order"}
-            </button>
-            {isReviewMode && (
+            {isReviewMode ? (
+              <div className="space-y-3">
+                <p className="text-sm text-gray-600 bg-blue-50 p-3 rounded-lg">
+                  Review your items and adjust quantities if needed. Staff
+                  assistance may be required for certain adjustments.
+                </p>
+                <button
+                  onClick={() => console.log("Proceeding to payment...")}
+                  className="w-full p-3 text-white font-bold rounded-lg bg-green-500 hover:bg-green-600 active:bg-green-700 transition-all duration-200"
+                >
+                  Confirm and Proceed to Payment
+                </button>
+              </div>
+            ) : (
               <button
-                onClick={exitReviewMode}
-                className="mt-2 w-full p-3 text-blue-500 border border-blue-500 rounded-lg hover:bg-blue-50"
+                onClick={handleCheckout}
+                disabled={undeterminedObjects.length > 0}
+                className={`w-full p-3 text-white font-bold rounded-lg transition-all duration-200 ${
+                  undeterminedObjects.length > 0
+                    ? "bg-gray-400 cursor-not-allowed"
+                    : "bg-blue-500 hover:bg-blue-600 active:bg-blue-700"
+                }`}
               >
-                Resume Scanning
+                {undeterminedObjects.length > 0
+                  ? "Please wait for all items to be confirmed"
+                  : "Review Order"}
               </button>
             )}
           </div>
