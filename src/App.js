@@ -1,7 +1,6 @@
 import React, { useEffect, useRef, useState, useCallback } from "react";
 import io from "socket.io-client";
 import { motion, AnimatePresence } from "framer-motion";
-import QuantityAdjuster from "./components/QuantityAdjuster";
 
 const LiveDetection = () => {
   const canvasRef = useRef(null);
@@ -20,55 +19,33 @@ const LiveDetection = () => {
     empty_confidence: 1.0,
   });
   const [processingItems, setProcessingItems] = useState(new Set());
-  const [manualQuantities, setManualQuantities] = useState({});
-  const [baselineQuantities, setBaselineQuantities] = useState({});
-  const [isReviewMode, setIsReviewMode] = useState(false);
-  const [originalQuantities, setOriginalQuantities] = useState({});
-  const REVIEW_MODE_INSTRUCTION =
-    "You are now in review mode. You can adjust item quantities if needed. Please note that quantity reductions may require staff assistance depending on the total value.";
+  const [isReviewing, setIsReviewing] = useState(false);
+  const [needsAssistance, setNeedsAssistance] = useState(false);
 
   let frameCount = 0;
   let lastTime = Date.now();
 
   const BACKEND_URL = "https://192.168.137.154:5000";
 
-  const updateShoppingCart = useCallback(
-    (tracked, confirmed) => {
-      const newCart = { ...confirmed };
-
-      // Handle tracked confirmations
-      tracked.forEach((obj) => {
-        if (obj.status === "confirmed") {
-          const itemName = obj.class;
-          if (!newCart[itemName]) {
-            newCart[itemName] = {
-              quantity: 1,
-              unit_price: 0,
-              image_path: "",
-            };
-          } else {
-            // If we're not in review mode, increment quantities normally
-            if (!isReviewMode) {
-              newCart[itemName].quantity += 1;
-            }
-          }
-          lastConfirmedTimeRef.current[obj.id] = Date.now();
+  const updateShoppingCart = useCallback((tracked, confirmed) => {
+    const newCart = { ...confirmed };
+    tracked.forEach((obj) => {
+      if (obj.status === "confirmed") {
+        const itemName = obj.class;
+        if (!newCart[itemName]) {
+          newCart[itemName] = {
+            quantity: 1,
+            unit_price: 0,
+            image_path: "",
+          };
+        } else {
+          newCart[itemName].quantity += 1;
         }
-      });
-
-      // Apply manual quantity overrides only in review mode
-      if (isReviewMode) {
-        Object.entries(manualQuantities).forEach(([itemName, manualQty]) => {
-          if (newCart[itemName]) {
-            newCart[itemName].quantity = manualQty;
-          }
-        });
+        lastConfirmedTimeRef.current[obj.id] = Date.now();
       }
-
-      setConfirmedObjects(newCart);
-    },
-    [manualQuantities, isReviewMode]
-  ); // Add isReviewMode to dependencies
+    });
+    setConfirmedObjects(newCart);
+  }, []);
 
   useEffect(() => {
     socketRef.current = io(BACKEND_URL, {
@@ -134,25 +111,6 @@ const LiveDetection = () => {
       }
     };
   }, [updateShoppingCart]);
-
-  useEffect(() => {
-    Object.entries(confirmedObjects).forEach(([itemName, item]) => {
-      if (!baselineQuantities[itemName]) {
-        setBaselineQuantities((prev) => ({
-          ...prev,
-          [itemName]: item.quantity,
-        }));
-      }
-    });
-  }, [confirmedObjects]);
-
-  const handleQuantityChange = (itemName, newQuantity) => {
-    const difference = newQuantity - baselineQuantities[itemName];
-    setManualQuantities((prev) => ({
-      ...prev,
-      [itemName]: baselineQuantities[itemName] + difference,
-    }));
-  };
 
   useEffect(() => {
     const newInstruction = getContextualInstructions();
@@ -426,32 +384,24 @@ const LiveDetection = () => {
       lastTime = currentTime;
     }
   };
-  // Add this function to handle mode switching
-
-  const enterReviewMode = () => {
-    setIsReviewMode(true);
-    // Store original quantities for reference
-    const original = {};
-    Object.entries(confirmedObjects).forEach(([itemName, item]) => {
-      original[itemName] = item.quantity;
-    });
-    setOriginalQuantities(original);
-    // Stop scanning
-    if (socketRef.current) {
-      socketRef.current.disconnect();
-    }
-    // Set review mode instruction
-    setInstruction(REVIEW_MODE_INSTRUCTION);
+  const handleCheckout = () => {
+    setIsReviewing(true);
   };
 
-  // Modify the handleCheckout function
-  const handleCheckout = () => {
-    if (!isReviewMode) {
-      enterReviewMode();
-    } else {
-      // Proceed with actual checkout
-      console.log("Proceeding to payment...");
-    }
+  const handleQuantityUpdate = (itemName, newQuantity) => {
+    setConfirmedObjects((prev) => ({
+      ...prev,
+      [itemName]: {
+        ...prev[itemName],
+        quantity: newQuantity,
+      },
+    }));
+  };
+
+  const handleRequestHelp = () => {
+    setNeedsAssistance(true);
+    // Here you would implement the logic to notify staff
+    console.log("Assistance requested");
   };
 
   return (
@@ -505,30 +455,12 @@ const LiveDetection = () => {
                         />
                       </td>
                       <td className="p-2 font-medium">{itemName}</td>
-                      <td className="p-2 text-center">
-                        <QuantityAdjuster
-                          itemName={itemName}
-                          currentQuantity={
-                            manualQuantities[itemName] ?? item.quantity
-                          }
-                          unitPrice={item.unit_price}
-                          onQuantityChange={handleQuantityChange}
-                          baselineQuantity={baselineQuantities[itemName]}
-                          isScanning={
-                            !isReviewMode && trackedObjects.length > 0
-                          }
-                          disabled={!isReviewMode}
-                        />
-                      </td>
+                      <td className="p-2 text-center">{item.quantity}</td>
                       <td className="p-2 text-right">
                         ${item.unit_price?.toFixed(2) || "N/A"}
                       </td>
                       <td className="p-2 text-right font-medium">
-                        $
-                        {(
-                          (manualQuantities[itemName] ?? item.quantity) *
-                          (item.unit_price || 0)
-                        ).toFixed(2)}
+                        ${(item.quantity * (item.unit_price || 0)).toFixed(2)}
                       </td>
                     </motion.tr>
                   ))}
@@ -536,38 +468,34 @@ const LiveDetection = () => {
               </tbody>
             </table>
           </div>
+          {isReviewing && (
+            <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+              <div className="bg-white rounded-lg max-w-3xl w-full max-h-[90vh] overflow-y-auto m-4">
+                <CartReview
+                  confirmedObjects={confirmedObjects}
+                  onUpdateQuantity={handleQuantityUpdate}
+                  onRequestHelp={handleRequestHelp}
+                />
+              </div>
+            </div>
+          )}
           <div className="mt-4 p-4 bg-white rounded-lg shadow-sm">
-            <div className="text-xl font-bold text-right mb-2">
+            <div className="text-xl font-bold text-right">
               Total: ${totalPrice.toFixed(2)}
             </div>
-            {isReviewMode ? (
-              <div className="space-y-3">
-                <p className="text-sm text-gray-600 bg-blue-50 p-3 rounded-lg">
-                  Review your items and adjust quantities if needed. Staff
-                  assistance may be required for certain adjustments.
-                </p>
-                <button
-                  onClick={() => console.log("Proceeding to payment...")}
-                  className="w-full p-3 text-white font-bold rounded-lg bg-green-500 hover:bg-green-600 active:bg-green-700 transition-all duration-200"
-                >
-                  Confirm and Proceed to Payment
-                </button>
-              </div>
-            ) : (
-              <button
-                onClick={handleCheckout}
-                disabled={undeterminedObjects.length > 0}
-                className={`w-full p-3 text-white font-bold rounded-lg transition-all duration-200 ${
-                  undeterminedObjects.length > 0
-                    ? "bg-gray-400 cursor-not-allowed"
-                    : "bg-blue-500 hover:bg-blue-600 active:bg-blue-700"
-                }`}
-              >
-                {undeterminedObjects.length > 0
-                  ? "Please wait for all items to be confirmed"
-                  : "Review Order"}
-              </button>
-            )}
+            <button
+              onClick={handleCheckout}
+              disabled={undeterminedObjects.length > 0}
+              className={`mt-4 w-full p-3 text-white font-bold rounded-lg transition-all duration-200 ${
+                undeterminedObjects.length > 0
+                  ? "bg-gray-400 cursor-not-allowed"
+                  : "bg-blue-500 hover:bg-blue-600 active:bg-blue-700"
+              }`}
+            >
+              {undeterminedObjects.length > 0
+                ? "Please wait for all items to be confirmed"
+                : "Proceed to Checkout"}
+            </button>
           </div>
         </div>
       </div>
