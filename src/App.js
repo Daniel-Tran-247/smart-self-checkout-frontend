@@ -22,6 +22,8 @@ const LiveDetection = () => {
   const [processingItems, setProcessingItems] = useState(new Set());
   const [manualQuantities, setManualQuantities] = useState({});
   const [baselineQuantities, setBaselineQuantities] = useState({});
+  const [isReviewMode, setIsReviewMode] = useState(false);
+  const [originalQuantities, setOriginalQuantities] = useState({});
 
   let frameCount = 0;
   let lastTime = Date.now();
@@ -422,8 +424,29 @@ const LiveDetection = () => {
       lastTime = currentTime;
     }
   };
+  // Add this function to handle mode switching
+  const enterReviewMode = () => {
+    setIsReviewMode(true);
+    // Store original quantities for reference
+    const original = {};
+    Object.entries(confirmedObjects).forEach(([itemName, item]) => {
+      original[itemName] = item.quantity;
+    });
+    setOriginalQuantities(original);
+    // Stop scanning
+    if (socketRef.current) {
+      socketRef.current.disconnect();
+    }
+  };
+
+  // Modify the handleCheckout function
   const handleCheckout = () => {
-    console.log("Proceed to checkout");
+    if (!isReviewMode) {
+      enterReviewMode();
+    } else {
+      // Proceed with actual checkout
+      console.log("Proceeding to payment...");
+    }
   };
 
   return (
@@ -486,7 +509,10 @@ const LiveDetection = () => {
                           unitPrice={item.unit_price}
                           onQuantityChange={handleQuantityChange}
                           baselineQuantity={baselineQuantities[itemName]}
-                          isScanning={trackedObjects.length > 0}
+                          isScanning={
+                            !isReviewMode && trackedObjects.length > 0
+                          }
+                          disabled={!isReviewMode} // Add this prop
                         />
                       </td>
                       <td className="p-2 text-right">
@@ -520,8 +546,22 @@ const LiveDetection = () => {
             >
               {undeterminedObjects.length > 0
                 ? "Please wait for all items to be confirmed"
-                : "Proceed to Checkout"}
+                : isReviewMode
+                ? "Proceed to Payment"
+                : "Review Order"}
             </button>
+            {isReviewMode && (
+              <button
+                onClick={() => {
+                  setIsReviewMode(false);
+                  setManualQuantities({});
+                  socketRef.current.connect();
+                }}
+                className="mt-2 w-full p-3 text-blue-500 border border-blue-500 rounded-lg hover:bg-blue-50"
+              >
+                Resume Scanning
+              </button>
+            )}
           </div>
         </div>
       </div>
