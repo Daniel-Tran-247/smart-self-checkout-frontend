@@ -34,7 +34,7 @@ const LiveDetection = () => {
     (tracked, confirmed) => {
       const newCart = { ...confirmed };
 
-      // First, handle tracked confirmations
+      // Handle tracked confirmations
       tracked.forEach((obj) => {
         if (obj.status === "confirmed") {
           const itemName = obj.class;
@@ -45,28 +45,28 @@ const LiveDetection = () => {
               image_path: "",
             };
           } else {
-            newCart[itemName].quantity += 1;
+            // If we're not in review mode, increment quantities normally
+            if (!isReviewMode) {
+              newCart[itemName].quantity += 1;
+            }
           }
           lastConfirmedTimeRef.current[obj.id] = Date.now();
         }
       });
 
-      // Then, apply manual quantity overrides
-      Object.entries(manualQuantities).forEach(([itemName, manualQty]) => {
-        if (newCart[itemName]) {
-          // If the item exists in cart and has a manual override
-          const difference = manualQty - baselineQuantities[itemName];
-          newCart[itemName].quantity =
-            baselineQuantities[itemName] +
-            difference +
-            (newCart[itemName].quantity - baselineQuantities[itemName]);
-        }
-      });
+      // Apply manual quantity overrides only in review mode
+      if (isReviewMode) {
+        Object.entries(manualQuantities).forEach(([itemName, manualQty]) => {
+          if (newCart[itemName]) {
+            newCart[itemName].quantity = manualQty;
+          }
+        });
+      }
 
       setConfirmedObjects(newCart);
     },
-    [manualQuantities, baselineQuantities]
-  );
+    [manualQuantities, isReviewMode]
+  ); // Add isReviewMode to dependencies
 
   useEffect(() => {
     socketRef.current = io(BACKEND_URL, {
@@ -425,6 +425,7 @@ const LiveDetection = () => {
     }
   };
   // Add this function to handle mode switching
+
   const enterReviewMode = () => {
     setIsReviewMode(true);
     // Store original quantities for reference
@@ -436,6 +437,17 @@ const LiveDetection = () => {
     // Stop scanning
     if (socketRef.current) {
       socketRef.current.disconnect();
+    }
+  };
+
+  const exitReviewMode = () => {
+    setIsReviewMode(false);
+    // Reset all quantity-related states
+    setManualQuantities({});
+    setBaselineQuantities({});
+    // Reconnect socket
+    if (socketRef.current) {
+      socketRef.current.connect();
     }
   };
 
@@ -512,7 +524,7 @@ const LiveDetection = () => {
                           isScanning={
                             !isReviewMode && trackedObjects.length > 0
                           }
-                          disabled={!isReviewMode} // Add this prop
+                          disabled={!isReviewMode}
                         />
                       </td>
                       <td className="p-2 text-right">
@@ -552,11 +564,7 @@ const LiveDetection = () => {
             </button>
             {isReviewMode && (
               <button
-                onClick={() => {
-                  setIsReviewMode(false);
-                  setManualQuantities({});
-                  socketRef.current.connect();
-                }}
+                onClick={exitReviewMode}
                 className="mt-2 w-full p-3 text-blue-500 border border-blue-500 rounded-lg hover:bg-blue-50"
               >
                 Resume Scanning
