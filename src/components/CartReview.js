@@ -3,82 +3,130 @@ import { MinusCircle, PlusCircle, HelpCircle, AlertCircle } from "lucide-react";
 
 const PRICE_REDUCTION_LIMIT = 5.0;
 
-const CartReview = ({ confirmedObjects, onUpdateQuantity, onRequestHelp }) => {
+const CartReview = ({
+  confirmedObjects,
+  onUpdateQuantity,
+  onRequestHelp,
+  onBack,
+  onConfirm,
+}) => {
   const [isEditing, setIsEditing] = useState(false);
   const [showAlert, setShowAlert] = useState(false);
   const [alertConfig, setAlertConfig] = useState({});
   const [originalQuantities, setOriginalQuantities] = useState({});
+  const [modifiedCart, setModifiedCart] = useState(confirmedObjects);
+
+  // Initialize original quantities when component mounts
+  React.useEffect(() => {
+    const originals = {};
+    Object.entries(confirmedObjects).forEach(([itemName, item]) => {
+      originals[itemName] = item.quantity;
+    });
+    setOriginalQuantities(originals);
+    setModifiedCart(confirmedObjects);
+  }, [confirmedObjects]);
 
   const handleEditToggle = () => {
-    if (!isEditing) {
-      const originals = {};
-      Object.entries(confirmedObjects).forEach(([itemName, item]) => {
-        originals[itemName] = item.quantity;
-      });
-      setOriginalQuantities(originals);
-    }
     setIsEditing(!isEditing);
   };
 
   const calculatePriceChange = (itemName, newQuantity) => {
-    const item = confirmedObjects[itemName];
+    const item = modifiedCart[itemName];
     const quantityDiff = newQuantity - item.quantity;
     return quantityDiff * item.unit_price;
   };
 
+  const calculateTotalReductionValue = (itemName, newQuantity) => {
+    const item = modifiedCart[itemName];
+    const originalQuantity = originalQuantities[itemName];
+    const currentQuantity = item.quantity;
+
+    if (newQuantity >= originalQuantity) return 0;
+
+    const reductionQuantity = currentQuantity - newQuantity;
+    return reductionQuantity * item.unit_price;
+  };
+
   const handleQuantityChange = (itemName, newQuantity) => {
-    const item = confirmedObjects[itemName];
-    const priceChange = calculatePriceChange(itemName, newQuantity);
+    const item = modifiedCart[itemName];
     const isReduction = newQuantity < item.quantity;
-    const isAboveBaseline = newQuantity > originalQuantities[itemName];
+    const reductionValue = calculateTotalReductionValue(itemName, newQuantity);
+
+    if (isReduction && reductionValue > PRICE_REDUCTION_LIMIT) {
+      setAlertConfig({
+        title: "Assistance Required",
+        description:
+          "The requested reduction exceeds our self-service limit of $5.00. An assistant will be called to help you.",
+        showHelp: true,
+        action: () => {
+          onRequestHelp();
+          setShowAlert(false);
+        },
+      });
+      setShowAlert(true);
+      return;
+    }
 
     if (isReduction) {
-      if (isAboveBaseline || Math.abs(priceChange) <= PRICE_REDUCTION_LIMIT) {
-        setAlertConfig({
-          title: "Confirm Quantity Reduction",
-          description:
-            "Please note that this scanning session will be recorded to ensure process integrity. Make sure to return any removed items to their proper location.",
-          action: () => {
-            onUpdateQuantity(itemName, newQuantity);
-            setShowAlert(false);
-          },
-        });
-      } else {
-        setAlertConfig({
-          title: "Assistance Required",
-          description:
-            "The requested reduction exceeds our self-service limit. An assistant will be called to help you.",
-          showHelp: true,
-          action: () => {
-            onRequestHelp();
-            setShowAlert(false);
-          },
-        });
-      }
+      setAlertConfig({
+        title: "Confirm Quantity Reduction",
+        description:
+          "Please note that this scanning session will be recorded to ensure process integrity. Make sure to return any removed items to their proper location.",
+        action: () => {
+          updateQuantity(itemName, newQuantity);
+          setShowAlert(false);
+        },
+      });
       setShowAlert(true);
     } else {
-      onUpdateQuantity(itemName, newQuantity);
+      updateQuantity(itemName, newQuantity);
     }
+  };
+
+  const updateQuantity = (itemName, newQuantity) => {
+    setModifiedCart((prev) => ({
+      ...prev,
+      [itemName]: {
+        ...prev[itemName],
+        quantity: newQuantity,
+      },
+    }));
+  };
+
+  const handleConfirm = () => {
+    // Apply all modifications to the parent component
+    Object.entries(modifiedCart).forEach(([itemName, item]) => {
+      onUpdateQuantity(itemName, item.quantity);
+    });
+    onConfirm();
   };
 
   return (
     <div className="p-6 bg-white rounded-lg shadow-lg">
       <div className="flex justify-between items-center mb-6">
         <h2 className="text-2xl font-bold text-gray-800">Review Your Cart</h2>
-        <button
-          onClick={handleEditToggle}
-          className={`px-4 py-2 rounded-lg transition-colors ${
-            isEditing
-              ? "bg-gray-100 text-gray-700 hover:bg-gray-200"
-              : "bg-blue-500 text-white hover:bg-blue-600"
-          }`}
-        >
-          {isEditing ? "Done" : "Edit Quantities"}
-        </button>
+        <div className="flex gap-3">
+          <button
+            onClick={onBack}
+            className="px-4 py-2 rounded-lg bg-gray-100 text-gray-700 hover:bg-gray-200"
+          >
+            Back to Scanning
+          </button>
+          <button
+            onClick={handleEditToggle}
+            className={`px-4 py-2 rounded-lg transition-colors ${
+              isEditing
+                ? "bg-gray-100 text-gray-700 hover:bg-gray-200"
+                : "bg-blue-500 text-white hover:bg-blue-600"
+            }`}
+          >
+            {isEditing ? "Done" : "Edit Quantities"}
+          </button>
+        </div>
       </div>
 
-      <div className="space-y-4">
-        {Object.entries(confirmedObjects).map(([itemName, item]) => (
+      <div className="space-y-4 mb-6">
+        {Object.entries(modifiedCart).map(([itemName, item]) => (
           <div
             key={itemName}
             className="flex items-center justify-between p-4 border border-gray-200 rounded-lg hover:shadow-md transition-shadow"
@@ -132,6 +180,24 @@ const CartReview = ({ confirmedObjects, onUpdateQuantity, onRequestHelp }) => {
             </div>
           </div>
         ))}
+      </div>
+
+      <div className="flex justify-between items-center pt-4 border-t">
+        <div className="text-xl font-bold">
+          Total: $
+          {Object.entries(modifiedCart)
+            .reduce(
+              (sum, [_, item]) => sum + item.quantity * item.unit_price,
+              0
+            )
+            .toFixed(2)}
+        </div>
+        <button
+          onClick={handleConfirm}
+          className="px-6 py-3 rounded-lg bg-green-500 text-white hover:bg-green-600"
+        >
+          Confirm and Pay
+        </button>
       </div>
 
       {showAlert && (

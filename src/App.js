@@ -22,6 +22,7 @@ const LiveDetection = () => {
   const [processingItems, setProcessingItems] = useState(new Set());
   const [isReviewing, setIsReviewing] = useState(false);
   const [needsAssistance, setNeedsAssistance] = useState(false);
+  const [isScanningPaused, setIsScanningPaused] = useState(false);
 
   let frameCount = 0;
   let lastTime = Date.now();
@@ -49,6 +50,8 @@ const LiveDetection = () => {
   }, []);
 
   useEffect(() => {
+    if (isScanningPaused) return;
+
     socketRef.current = io(BACKEND_URL, {
       secure: true,
       rejectUnauthorized: false,
@@ -62,24 +65,7 @@ const LiveDetection = () => {
       pingInterval: 25000,
     });
 
-    socketRef.current.on("connect_error", (error) => {
-      console.log("Connection Error:", error);
-    });
-
-    socketRef.current.on("disconnect", (reason) => {
-      console.log("Disconnected:", reason);
-    });
-
     socketRef.current.on("detection_results", (data) => {
-      console.log("Received tracked objects:", data.tracked_objects);
-      console.log("Frame status:", data.frame_status);
-      console.log(
-        "Valid detections:",
-        data.tracked_objects?.filter(
-          (obj) => obj.is_valid || obj.status === "confirmed"
-        )
-      );
-
       const img = new Image();
       img.onload = () => {
         drawDetections(img, data.tracked_objects);
@@ -111,7 +97,7 @@ const LiveDetection = () => {
         socketRef.current.disconnect();
       }
     };
-  }, [updateShoppingCart]);
+  }, [updateShoppingCart, isScanningPaused]);
 
   useEffect(() => {
     const newInstruction = getContextualInstructions();
@@ -385,8 +371,20 @@ const LiveDetection = () => {
       lastTime = currentTime;
     }
   };
+
   const handleCheckout = () => {
+    setIsScanningPaused(true);
     setIsReviewing(true);
+  };
+
+  const handleBackToScan = () => {
+    setIsScanningPaused(false);
+    setIsReviewing(false);
+  };
+
+  const handleConfirmCart = () => {
+    // Proceed to payment processing
+    console.log("Processing payment...");
   };
 
   const handleQuantityUpdate = (itemName, newQuantity) => {
@@ -476,6 +474,8 @@ const LiveDetection = () => {
                   confirmedObjects={confirmedObjects}
                   onUpdateQuantity={handleQuantityUpdate}
                   onRequestHelp={handleRequestHelp}
+                  onBack={handleBackToScan}
+                  onConfirm={handleConfirmCart}
                 />
               </div>
             </div>
