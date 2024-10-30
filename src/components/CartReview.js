@@ -50,16 +50,23 @@ const CartReview = ({
 
   const handleQuantityChange = (itemName, newQuantity) => {
     const item = modifiedCart[itemName];
+    const originalQuantity = originalQuantities[itemName];
     const isReduction = newQuantity < item.quantity;
 
-    // Calculate total reduction from original quantity
-    const totalReductionValue = calculateTotalReductionValue(
-      itemName,
-      newQuantity
-    );
+    // If reducing but still above or equal to original quantity, no warning needed
+    if (isReduction && newQuantity >= originalQuantity) {
+      updateQuantity(itemName, newQuantity);
+      return;
+    }
 
-    if (isReduction) {
-      // Check if total reduction exceeds limit
+    // Only check reduction limits when going below original quantity
+    if (isReduction && newQuantity < originalQuantity) {
+      // Calculate total reduction from original quantity
+      const totalReductionValue = calculateTotalReductionValue(
+        itemName,
+        newQuantity
+      );
+
       if (totalReductionValue > PRICE_REDUCTION_LIMIT) {
         setAlertConfig({
           title: "Assistance Required",
@@ -89,6 +96,7 @@ const CartReview = ({
       });
       setShowAlert(true);
     } else {
+      // For increases or reductions above original quantity
       updateQuantity(itemName, newQuantity);
     }
   };
@@ -219,6 +227,7 @@ const CartReview = ({
         </button>
       </div>
 
+      {/* Alert Dialog */}
       {showAlert && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
           <div className="bg-white rounded-lg max-w-md w-full p-6">
@@ -249,6 +258,7 @@ const CartReview = ({
         </div>
       )}
 
+      {/* Add Items Prompt */}
       {showAddItemsPrompt && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
           <div className="bg-white rounded-lg max-w-md w-full p-6">
