@@ -36,8 +36,8 @@ const LiveDetection = () => {
   let frameCount = 0;
   let lastTime = Date.now();
 
-  const BACKEND_URL = "https://192.168.137.154:5000";
-
+  //const BACKEND_URL = "https://192.168.137.154:5000";
+  const BACKEND_URL = "https://172.20.10.2:5000";
   const updateShoppingCart = useCallback((tracked, confirmed) => {
     const newCart = { ...confirmed };
     tracked.forEach((obj) => {
@@ -561,7 +561,7 @@ const LiveDetection = () => {
                 </div>
               </div>
             )}
-            
+
             {showReviewInstructions && (
               <ReviewInstructions onClose={handleReviewInstructions} />
             )}
