@@ -11,6 +11,7 @@ import React, { useEffect, useState } from "react";
 import { StaffLoginMenu } from "./StaffLoginButton";
 import StaffLogin from "./StaffLogin";
 import { endpoint } from "../services/endpoint";
+import HelpRequestModal from "./HelpRequestModal";
 
 const BACKEND_URL = endpoint;
 const PRICE_REDUCTION_LIMIT = 5.0;
@@ -146,6 +147,7 @@ const CartReview = ({
   const [storeItemsError, setStoreItemsError] = useState(false);
   const [showLoginModal, setShowLoginModal] = useState(false);
   const [hasEdits, setHasEdits] = useState(false);
+  const [showHelpModal, setShowHelpModal] = useState(false);
 
   useEffect(() => {
     const originals = {};
@@ -214,7 +216,7 @@ const CartReview = ({
         )}. An assistant will be called to help you.`,
         showHelp: true,
         action: () => {
-          onRequestHelp();
+          setShowHelpModal(true); 
           setShowAlert(false);
         },
       });
@@ -268,6 +270,11 @@ const CartReview = ({
 
   const handleLoginClick = () => {
     setShowLoginModal(true);
+  };
+
+  const handleRequestHelp = () => {
+    setShowHelpModal(true);
+    if (onRequestHelp) onRequestHelp();
   };
 
   return (
@@ -462,6 +469,9 @@ const CartReview = ({
             setShowLoginModal(false);
           }}
         />
+      )}
+      {showHelpModal && (
+        <HelpRequestModal onClose={() => setShowHelpModal(false)} />
       )}
     </div>
   );

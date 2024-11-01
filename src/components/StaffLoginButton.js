@@ -1,20 +1,36 @@
 import { HelpCircle, LogIn, LogOut, UserCircle } from "lucide-react";
 import React, { useState } from "react";
 import Draggable from "react-draggable";
+import HelpRequestModal from "./HelpRequestModal";
 
-export const DraggableHelpButton = ({ onClick }) => (
-  <Draggable bounds="parent">
-    <div className="fixed top-5 right-6 z-[9999]">
-      <button
-        onClick={onClick}
-        className="flex items-center gap-2 px-4 py-2 bg-yellow-500 text-white rounded-lg hover:bg-yellow-600 shadow-lg cursor-pointer"
-      >
-        <HelpCircle className="w-5 h-5" />
-        <span>Need Help?</span>
-      </button>
-    </div>
-  </Draggable>
-);
+export const DraggableHelpButton = ({ onClick }) => {
+  const [showHelpModal, setShowHelpModal] = useState(false);
+
+  const handleHelpClick = () => {
+    setShowHelpModal(true);
+    if (onClick) onClick();
+  };
+
+  return (
+    <>
+      <Draggable bounds="parent">
+        <div className="fixed top-5 right-6 z-[9999]">
+          <button
+            onClick={handleHelpClick}
+            className="flex items-center gap-2 px-4 py-2 bg-yellow-500 text-white rounded-lg hover:bg-yellow-600 shadow-lg cursor-pointer"
+          >
+            <HelpCircle className="w-5 h-5" />
+            <span>Need Help?</span>
+          </button>
+        </div>
+      </Draggable>
+
+      {showHelpModal && (
+        <HelpRequestModal onClose={() => setShowHelpModal(false)} />
+      )}
+    </>
+  );
+};
 
 export const StaffLoginButton = ({ isStaffMode, onLoginClick, onLogout }) => {
   if (isStaffMode) {
