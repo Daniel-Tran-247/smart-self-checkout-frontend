@@ -8,6 +8,8 @@ import {
   X,
 } from "lucide-react";
 import React, { useState } from "react";
+
+const BACKEND_URL = endpoint;
 // Staff Login Modal
 const StaffLogin = ({ onClose, onLogin }) => {
   const [credentials, setCredentials] = useState({
@@ -16,8 +18,6 @@ const StaffLogin = ({ onClose, onLogin }) => {
   });
   const [error, setError] = useState("");
   const [isLoading, setIsLoading] = useState(false);
-  //const BACKEND_URL = "https://192.168.137.154:5000";
-  const BACKEND_URL = "https://172.20.10.2:5000";
 
   const handleSubmit = async (e) => {
     e.preventDefault();
