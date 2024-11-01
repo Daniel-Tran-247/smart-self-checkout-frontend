@@ -10,9 +10,9 @@ import {
 import React, { useEffect, useState } from "react";
 import { StaffLoginMenu } from "./StaffLoginButton";
 import StaffLogin from "./StaffLogin";
+import { endpoint } from "../services/endpoint";
 
-//const BACKEND_URL = "https://192.168.137.154:5000";
-const BACKEND_URL = "https://172.20.10.2:5000";
+const BACKEND_URL = endpoint;
 const PRICE_REDUCTION_LIMIT = 5.0;
 
 const ItemSelector = ({ onSelect, onClose, storeItems }) => {
