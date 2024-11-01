@@ -8,6 +8,7 @@ import {
   X,
 } from "lucide-react";
 import React, { useState } from "react";
+import { endpoint } from "../services/endpoint";
 
 const BACKEND_URL = endpoint;
 // Staff Login Modal
