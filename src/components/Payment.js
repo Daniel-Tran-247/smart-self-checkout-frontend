@@ -134,7 +134,6 @@ const PaymentFlow = ({ cart, onSuccess, onCancel }) => {
               name,
               price: item.unit_price,
               quantity: item.quantity,
-              image_path: item.image_path,
             })),
             subtotal,
             tax,
@@ -142,14 +141,11 @@ const PaymentFlow = ({ cart, onSuccess, onCancel }) => {
             timestamp: new Date().toISOString(),
           };
 
-          // Store receipt data in localStorage
-          localStorage.setItem(
-            `receipt_${purchaseId}`,
-            JSON.stringify(receiptData)
-          );
+          // Encode receipt data for URL
+          const encodedData = btoa(JSON.stringify(receiptData));
 
-          // Generate receipt URL
-          const receiptUrl = `${window.location.origin}/receipt/${purchaseId}`;
+          // Generate receipt URL with encoded data
+          const receiptUrl = `${window.location.origin}/receipt/${purchaseId}?data=${encodedData}`;
 
           // Generate QR code
           const QRCode = require("qrcode");

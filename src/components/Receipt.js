@@ -1,20 +1,26 @@
 // src/components/Receipt.js
 import React from "react";
-import { useParams } from "react-router-dom";
+import { useParams, useLocation } from "react-router-dom";
 
 const Receipt = () => {
   const [receipt, setReceipt] = React.useState(null);
   const { purchaseId } = useParams();
+  const location = useLocation();
 
   React.useEffect(() => {
-    // Get receipt data from localStorage
-    if (purchaseId) {
-      const receiptData = localStorage.getItem(`receipt_${purchaseId}`);
-      if (receiptData) {
-        setReceipt(JSON.parse(receiptData));
+    try {
+      // Get receipt data from URL
+      const searchParams = new URLSearchParams(location.search);
+      const encodedData = searchParams.get("data");
+
+      if (encodedData) {
+        const decodedData = JSON.parse(atob(encodedData));
+        setReceipt(decodedData);
       }
+    } catch (error) {
+      console.error("Error parsing receipt data:", error);
     }
-  }, [purchaseId]);
+  }, [location.search]);
 
   if (!receipt) {
     return (
