@@ -12,6 +12,7 @@ import { StaffLoginMenu } from "./StaffLoginButton";
 import StaffLogin from "./StaffLogin";
 import { endpoint } from "../services/endpoint";
 import HelpRequestModal from "./HelpRequestModal";
+import PaymentFlow from "./Payment";
 
 const BACKEND_URL = endpoint;
 const PRICE_REDUCTION_LIMIT = 5.0;
@@ -148,6 +149,7 @@ const CartReview = ({
   const [showLoginModal, setShowLoginModal] = useState(false);
   const [hasEdits, setHasEdits] = useState(false);
   const [showHelpModal, setShowHelpModal] = useState(false);
+  const [showPayment, setShowPayment] = useState(false);
 
   useEffect(() => {
     const originals = {};
@@ -216,7 +218,7 @@ const CartReview = ({
         )}. An assistant will be called to help you.`,
         showHelp: true,
         action: () => {
-          setShowHelpModal(true); 
+          setShowHelpModal(true);
           setShowAlert(false);
         },
       });
@@ -262,19 +264,25 @@ const CartReview = ({
   };
 
   const handleConfirm = () => {
-    Object.entries(modifiedCart).forEach(([itemName, item]) => {
-      onUpdateQuantity(itemName, item.quantity);
-    });
-    onConfirm();
+    if (!isEditing) {
+      setShowPayment(true);
+    }
   };
 
   const handleLoginClick = () => {
     setShowLoginModal(true);
   };
 
-  const handleRequestHelp = () => {
-    setShowHelpModal(true);
-    if (onRequestHelp) onRequestHelp();
+  const handlePaymentSuccess = () => {
+    setShowPayment(false);
+    Object.entries(modifiedCart).forEach(([itemName, item]) => {
+      onUpdateQuantity(itemName, item.quantity);
+    });
+    onConfirm();
+  };
+
+  const handlePaymentCancel = () => {
+    setShowPayment(false);
   };
 
   return (
@@ -472,6 +480,14 @@ const CartReview = ({
       )}
       {showHelpModal && (
         <HelpRequestModal onClose={() => setShowHelpModal(false)} />
+      )}
+
+      {showPayment && (
+        <PaymentFlow
+          cart={modifiedCart}
+          onSuccess={handlePaymentSuccess}
+          onCancel={handlePaymentCancel}
+        />
       )}
     </div>
   );
