@@ -105,15 +105,6 @@ export const ReviewInstructions = ({ onClose }) => (
   <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
     <div className="bg-white rounded-lg p-6 max-w-md w-full m-4">
       <h3 className="text-xl font-bold mb-4">Review Your Cart</h3>
-      <p className="text-gray-600 mb-4">
-        You're about to review your shopping cart. In the review screen, you
-        can:
-      </p>
-      <ul className="list-disc ml-6 mb-6 space-y-2 text-gray-600">
-        <li>Review your items and total</li>
-        <li>Adjust quantities if needed</li>
-        <li>Get assistance if needed</li>
-      </ul>
       <p className="text-gray-600 mb-6">
         <strong>Note:</strong> You can return to scanning unless you make
         quantity adjustments. Once you modify any quantities, you'll need to
