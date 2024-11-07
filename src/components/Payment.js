@@ -2,6 +2,8 @@ import React, { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { CreditCard, X, QrCode, AlertCircle } from "lucide-react";
 import { endpoint } from "../services/endpoint";
+import HelpRequestModal from "./HelpRequestModal";
+import VirtualKeyboard from "./VirtualKeyboard";
 
 const BACKEND_URL = endpoint;
 const MAX_ATTEMPTS = 5;
@@ -15,6 +17,7 @@ const PaymentFlow = ({ cart, onSuccess, onCancel }) => {
   const [error, setError] = useState("");
   const [qrCode, setQrCode] = useState(null);
   const [showHelpModal, setShowHelpModal] = useState(false);
+  const [showKeyboard, setShowKeyboard] = useState(false);
 
   // Calculate totals
   const subtotal = Object.entries(cart).reduce(
@@ -25,95 +28,107 @@ const PaymentFlow = ({ cart, onSuccess, onCancel }) => {
   const total = subtotal + tax;
 
   // Simulate card tap for demo
+  // const handleCardTap = async () => {
+  //   try {
+  //     // In demo mode, simulate successful card read with sample data
+  //     const sampleCard = {
+  //       card_id: "123456789",
+  //       expiry: "12/24",
+  //       cvv: "123",
+  //     };
+  //     setCardDetails(sampleCard);
+  //     setStage("pin");
+  //     setError("");
+  //   } catch (error) {
+  //     setError("Error reading card. Please try again.");
+  //     handleAttemptFailed();
+  //   }
+  // };
+
+  useEffect(() => {
+    setError(""); // Clear error when stage changes
+  }, [stage]);
+
   const handleCardTap = async () => {
     try {
-      // In demo mode, simulate successful card read with sample data
-      const sampleCard = {
-        card_id: "123456789",
-        expiry: "12/24",
-        cvv: "123",
-      };
-      setCardDetails(sampleCard);
-      setStage("pin");
-      setError("");
+      const response = await fetch(`${BACKEND_URL}/tap_card`);
+      const data = await response.json();
+
+      if (response.ok) {
+        // Card found in database
+        setCardDetails(data);
+        setStage("pin");
+        setError(""); // Clear any existing error
+      } else {
+        // Card not found or other error
+        setError(data.message || "Invalid card. Please try again.");
+        handleAttemptFailed();
+      }
     } catch (error) {
+      console.error("Error reading card:", error);
       setError("Error reading card. Please try again.");
       handleAttemptFailed();
     }
   };
 
-  //   const handlePinSubmit = async () => {
-  //     if (pin.length !== 4) {
-  //       setError("PIN must be 4 digits");
-  //       return;
-  //     }
+  // const handlePinSubmit = async () => {
+  //   if (pin.length !== 4) {
+  //     setError("PIN must be 4 digits");
+  //     return;
+  //   }
 
-  //     try {
-  //       // In demo mode, simulate PIN verification
-  //       if (pin === "1234") {
-  //         try {
-  //           // Generate purchase ID
-  //           const purchaseId = Date.now().toString();
-  //           console.log("Generating QR code for purchase:", purchaseId);
+  //   try {
+  //     // In demo mode, simulate PIN verification
+  //     if (pin === "1234") {
+  //       try {
+  //         // Generate purchase ID
+  //         const purchaseId = Date.now().toString();
 
-  //           // Prepare cart data for the receipt
-  //           const cartData = {
-  //             items: Object.entries(cart).map(([name, item]) => ({
-  //               name,
-  //               price: item.unit_price,
-  //               quantity: item.quantity,
-  //               image_path: item.image_path,
-  //             })),
-  //             subtotal,
-  //             tax,
-  //             total,
-  //           };
+  //         // Prepare receipt data
+  //         const receiptData = {
+  //           items: Object.entries(cart).map(([name, item]) => ({
+  //             name,
+  //             price: item.unit_price,
+  //             quantity: item.quantity,
+  //           })),
+  //           subtotal,
+  //           tax,
+  //           total,
+  //           timestamp: new Date().toISOString(),
+  //         };
 
-  //           // Make request to generate QR code
-  //           const response = await fetch(
-  //             `${BACKEND_URL}/generate_qr/${purchaseId}`,
-  //             {
-  //               method: "POST",
-  //               headers: {
-  //                 "Content-Type": "application/json",
-  //               },
-  //               body: JSON.stringify(cartData),
-  //             }
-  //           );
+  //         // Encode receipt data for URL
+  //         const encodedData = btoa(JSON.stringify(receiptData));
 
-  //           if (!response.ok) {
-  //             const errorData = await response.json();
-  //             console.error("QR code generation error:", errorData);
-  //             throw new Error(errorData.error || "Failed to generate QR code");
-  //           }
+  //         // Generate receipt URL with encoded data
+  //         const receiptUrl = `${window.location.origin}/receipt/${purchaseId}?data=${encodedData}`;
 
-  //           // Convert response to blob
-  //           const blob = await response.blob();
-  //           const qrCodeUrl = URL.createObjectURL(blob);
+  //         // Generate QR code
+  //         const QRCode = require("qrcode");
+  //         const qrDataUrl = await QRCode.toDataURL(receiptUrl);
 
-  //           console.log("QR code generated successfully");
-  //           setQrCode(qrCodeUrl);
-  //           setStage("receipt");
+  //         setQrCode(qrDataUrl);
+  //         setStage("receipt");
 
-  //           // Auto-close after 10 seconds
-  //           setTimeout(() => {
-  //             onSuccess();
-  //           }, 10000);
-  //         } catch (error) {
-  //           console.error("Error generating QR code:", error);
-  //           setError("Failed to generate receipt. Please try again.");
-  //         }
-  //       } else {
-  //         setError("Invalid PIN");
-  //         setPin("");
-  //         handleAttemptFailed();
+  //         // Auto-close after 10 seconds
+  //         setTimeout(() => {
+  //           onSuccess();
+  //         }, 10000);
+  //       } catch (error) {
+  //         console.error("Error generating QR code:", error);
+  //         setError("Failed to generate receipt. Please try again.");
   //       }
-  //     } catch (error) {
-  //       console.error("Payment processing error:", error);
-  //       setError("Error processing payment. Please try again.");
+  //     } else {
+  //       setError("Invalid PIN");
+  //       setPin("");
   //       handleAttemptFailed();
   //     }
-  //   };
+  //   } catch (error) {
+  //     console.error("Payment processing error:", error);
+  //     setError("Error processing payment. Please try again.");
+  //     handleAttemptFailed();
+  //   }
+  // };
 
   const handlePinSubmit = async () => {
     if (pin.length !== 4) {
@@ -122,8 +137,24 @@ const PaymentFlow = ({ cart, onSuccess, onCancel }) => {
     }
 
     try {
-      // In demo mode, simulate PIN verification
-      if (pin === "1234") {
+      // Verify PIN with backend
+      const response = await fetch(`${BACKEND_URL}/verify_pin`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          card_id: cardDetails.card_id,
+          pin: pin,
+        }),
+      });
+
+      const data = await response.json();
+
+      if (response.ok) {
+        // Clear error and proceed to receipt
+        setError("");
+
         try {
           // Generate purchase ID
           const purchaseId = Date.now().toString();
@@ -157,31 +188,44 @@ const PaymentFlow = ({ cart, onSuccess, onCancel }) => {
           // Auto-close after 10 seconds
           setTimeout(() => {
             onSuccess();
-          }, 10000);
+          }, 20000);
         } catch (error) {
           console.error("Error generating QR code:", error);
           setError("Failed to generate receipt. Please try again.");
         }
       } else {
-        setError("Invalid PIN");
+        setError(data.message || "Invalid PIN");
         setPin("");
         handleAttemptFailed();
       }
     } catch (error) {
-      console.error("Payment processing error:", error);
-      setError("Error processing payment. Please try again.");
+      console.error("Error verifying PIN:", error);
+      setError("Error verifying PIN. Please try again.");
       handleAttemptFailed();
     }
   };
 
   // Add cleanup for QR code URL when component unmounts
   useEffect(() => {
+    let pollInterval;
+
+    if (stage === "tap") {
+      pollInterval = setInterval(async () => {
+        try {
+          await handleCardTap();
+        } catch (error) {
+          console.error("Card polling error:", error);
+          // Don't set error here as handleCardTap already handles it
+        }
+      }, 2000);
+    }
+
     return () => {
-      if (qrCode) {
-        URL.revokeObjectURL(qrCode);
+      if (pollInterval) {
+        clearInterval(pollInterval);
       }
     };
-  }, [qrCode]);
+  }, [stage]);
 
   const handleAttemptFailed = () => {
     setAttempts((prev) => {
@@ -193,42 +237,20 @@ const PaymentFlow = ({ cart, onSuccess, onCancel }) => {
     });
   };
 
-  const ReceiptView = () => (
-    <div className="text-center">
-      <motion.div
-        initial={{ opacity: 0, y: 20 }}
-        animate={{ opacity: 1, y: 0 }}
-        className="mb-6"
-      >
-        <QrCode className="w-16 h-16 text-green-500 mx-auto mb-4" />
-        {qrCode && (
-          <div className="relative">
-            <img
-              src={qrCode}
-              alt="QR Code for receipt"
-              className="mx-auto max-w-[200px] mb-4 rounded-lg shadow-lg"
-            />
-            <p className="text-sm text-gray-500 mt-2">
-              Scan to view your receipt
-            </p>
-          </div>
-        )}
-      </motion.div>
+  useEffect(() => {
+    let pollInterval;
 
-      <div className="relative mt-8 mb-4 h-1 bg-gray-200 rounded">
-        <motion.div
-          initial={{ width: "100%" }}
-          animate={{ width: "0%" }}
-          transition={{ duration: 10, ease: "linear" }}
-          className="absolute top-0 left-0 h-full bg-blue-500 rounded"
-        />
-      </div>
+    if (stage === "tap") {
+      // Poll for card taps every second
+      pollInterval = setInterval(handleCardTap, 2000);
+    }
 
-      <p className="text-sm text-gray-600">
-        This screen will close automatically in 10 seconds
-      </p>
-    </div>
-  );
+    return () => {
+      if (pollInterval) {
+        clearInterval(pollInterval);
+      }
+    };
+  }, [stage]);
 
   return (
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
@@ -290,16 +312,8 @@ const PaymentFlow = ({ cart, onSuccess, onCancel }) => {
               <p className="text-gray-600 mb-4">
                 Please tap your card on the reader
               </p>
-              {/* Demo button */}
-              <button
-                onClick={handleCardTap}
-                className="w-full py-3 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors"
-              >
-                Simulate Card Tap
-              </button>
-              <p className="text-sm text-gray-500 mt-2">
-                Demo: Click to simulate tapping a card
-              </p>
+              {/* Real-time card reading status */}
+              <p className="text-sm text-gray-500 mt-2">Waiting for card...</p>
             </div>
           )}
 
@@ -313,6 +327,8 @@ const PaymentFlow = ({ cart, onSuccess, onCancel }) => {
                 onChange={(e) =>
                   setPin(e.target.value.replace(/\D/g, "").slice(0, 4))
                 }
+                readOnly
+                onClick={() => setShowKeyboard(true)}
                 className="w-full text-center text-2xl tracking-widest mb-4 p-3 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:outline-none"
                 placeholder="••••"
                 autoFocus
@@ -354,11 +370,11 @@ const PaymentFlow = ({ cart, onSuccess, onCancel }) => {
               <motion.div
                 initial={{ width: "100%" }}
                 animate={{ width: "0%" }}
-                transition={{ duration: 10, ease: "linear" }}
+                transition={{ duration: 20, ease: "linear" }}
                 className="h-1 bg-blue-500 mt-4"
               />
               <p className="text-sm text-gray-500 mt-2">
-                This screen will close automatically in 10 seconds
+                This screen will close automatically in 20 seconds
               </p>
             </div>
           )}
@@ -383,6 +399,23 @@ const PaymentFlow = ({ cart, onSuccess, onCancel }) => {
           </div>
         </div>
       )}
+
+      <VirtualKeyboard
+        show={showKeyboard}
+        type="numeric"
+        maxLength={4}
+        initialValue=""
+        fieldType="password"
+        onInput={(value) => setPin(value)}
+        onClose={() => {
+          setShowKeyboard(false);
+        }}
+        onSubmit={(value) => {
+          setPin(value);
+          setShowKeyboard(false);
+          handlePinSubmit();
+        }}
+      />
     </div>
   );
 };

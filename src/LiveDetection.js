@@ -8,6 +8,7 @@ import {
   ReviewInstructions,
 } from "./components/StaffLoginButton";
 import { endpoint } from "./services/endpoint";
+import SessionComplete from "./components/SessionComplete";
 
 const BACKEND_URL = endpoint;
 
@@ -34,30 +35,104 @@ const LiveDetection = () => {
   const [isStaffMode, setIsStaffMode] = useState(false);
   const [storeItems, setStoreItems] = useState([]); // You'll need to fetch this from your backend
   const [staffUser, setStaffUser] = useState(null);
-
+  const [showLiveDetection, setShowLiveDetection] = useState(true);
+  const [showSessionComplete, setShowSessionComplete] = useState(false);
   const [showReviewInstructions, setShowReviewInstructions] = useState(false);
+
+  const resetSession = async () => {
+    try {
+      // Call backend to reset tracking state
+      const response = await fetch(`${BACKEND_URL}/reset-session`, {
+        method: "POST",
+      });
+
+      if (!response.ok) {
+        throw new Error("Failed to reset session on server");
+      }
+
+      // Clear all frontend state
+      setConfirmedObjects({});
+      setUndeterminedObjects([]);
+      setTrackedObjects([]);
+      setProcessingItems(new Set());
+      setTotalPrice(0);
+      setInstruction("Please place items in the scanning area");
+      scanStartTimeRef.current = null;
+      lastInstructionRef.current = "";
+      lastConfirmedTimeRef.current = {};
+      setShowSessionComplete(false);
+      setIsReviewing(false);
+      setIsScanningPaused(false);
+      setFrameStatus({ is_empty: true, empty_confidence: 1.0 });
+
+      // Reconnect socket for new session
+      if (socketRef.current) {
+        socketRef.current.disconnect();
+        // Small delay to ensure clean disconnect before reconnecting
+        setTimeout(() => {
+          socketRef.current.connect();
+        }, 500);
+      }
+    } catch (error) {
+      console.error("Error resetting session:", error);
+      // You might want to show an error message to the user here
+    }
+  };
+
   let frameCount = 0;
   let lastTime = Date.now();
 
-  const updateShoppingCart = useCallback((tracked, confirmed) => {
-    const newCart = { ...confirmed };
-    tracked.forEach((obj) => {
-      if (obj.status === "confirmed") {
-        const itemName = obj.class;
-        if (!newCart[itemName]) {
+  const updateShoppingCart = useCallback(
+    (tracked, confirmed) => {
+      const newCart = { ...confirmed };
+
+      // First, handle newly confirmed items from tracking
+      tracked.forEach((obj) => {
+        if (obj.status === "confirmed") {
+          const itemName = obj.class;
+          if (!newCart[itemName]) {
+            // Find the item details from storeItems
+            const itemDetails = storeItems.find(
+              (item) => item.name === itemName
+            );
+            if (itemDetails) {
+              newCart[itemName] = {
+                quantity: 1,
+                unit_price: itemDetails.unit_price,
+                image_path: itemDetails.image_path,
+              };
+            } else {
+              // Fallback if item not found in database
+              newCart[itemName] = {
+                quantity: 1,
+                unit_price: 0,
+                image_path: "",
+              };
+            }
+          } else {
+            newCart[itemName].quantity += 1;
+          }
+          lastConfirmedTimeRef.current[obj.id] = Date.now();
+        }
+      });
+
+      // Merge with existing confirmed objects to preserve their details
+      Object.entries(confirmed).forEach(([itemName, item]) => {
+        if (newCart[itemName]) {
+          // Keep existing details but update quantity if needed
           newCart[itemName] = {
-            quantity: 1,
-            unit_price: 0,
-            image_path: "",
+            ...item,
+            quantity: Math.max(item.quantity, newCart[itemName].quantity),
           };
         } else {
-          newCart[itemName].quantity += 1;
+          newCart[itemName] = item;
         }
-        lastConfirmedTimeRef.current[obj.id] = Date.now();
-      }
-    });
-    setConfirmedObjects(newCart);
-  }, []);
+      });
+
+      setConfirmedObjects(newCart);
+    },
+    [storeItems]
+  ); // Add storeItems to dependency array
 
   useEffect(() => {
     const fetchProducts = async () => {
@@ -416,8 +491,11 @@ const LiveDetection = () => {
   };
 
   const handleConfirmCart = () => {
-    // Proceed to payment processing
-    console.log("Processing payment...");
+    setShowSessionComplete(true);
+    setIsScanningPaused(true);
+    if (socketRef.current) {
+      socketRef.current.disconnect(); // Stop scanning during session complete screen
+    }
   };
 
   const handleQuantityUpdate = (itemName, newQuantity) => {
@@ -467,6 +545,17 @@ const LiveDetection = () => {
       },
     }));
   };
+
+  // When opening cart review:
+  const handleOpenCartReview = () => {
+    setShowLiveDetection(false);
+  };
+
+  // When closing cart review:
+  const handleCloseCartReview = () => {
+    setShowLiveDetection(true);
+  };
+
   return (
     <div className="h-screen overflow-hidden relative">
       <div className="flex flex-col h-screen bg-gray-100">
@@ -587,6 +676,7 @@ const LiveDetection = () => {
         </div>
       </div>
       <DraggableHelpButton onClick={handleRequestHelp} />
+      {showSessionComplete && <SessionComplete onStartNew={resetSession} />}
     </div>
   );
 };

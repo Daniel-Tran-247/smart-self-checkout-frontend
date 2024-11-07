@@ -9,6 +9,7 @@ import {
 } from "lucide-react";
 import React, { useState } from "react";
 import { endpoint } from "../services/endpoint";
+import VirtualKeyboard from "./VirtualKeyboard";
 
 const BACKEND_URL = endpoint;
 // Staff Login Modal
@@ -19,6 +20,8 @@ const StaffLogin = ({ onClose, onLogin }) => {
   });
   const [error, setError] = useState("");
   const [isLoading, setIsLoading] = useState(false);
+  const [showKeyboard, setShowKeyboard] = useState(false);
+  const [activeField, setActiveField] = useState(null); // 'username' or 'password'
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -82,6 +85,11 @@ const StaffLogin = ({ onClose, onLogin }) => {
             <input
               type="text"
               value={credentials.username}
+              readOnly
+              onClick={() => {
+                setActiveField("username");
+                setShowKeyboard(true);
+              }}
               onChange={(e) =>
                 setCredentials((prev) => ({
                   ...prev,
@@ -100,6 +108,11 @@ const StaffLogin = ({ onClose, onLogin }) => {
             <input
               type="password"
               value={credentials.password}
+              readOnly
+              onClick={() => {
+                setActiveField("password");
+                setShowKeyboard(true);
+              }}
               onChange={(e) =>
                 setCredentials((prev) => ({
                   ...prev,
@@ -127,6 +140,28 @@ const StaffLogin = ({ onClose, onLogin }) => {
           </button>
         </form>
       </motion.div>
+      <VirtualKeyboard
+        show={showKeyboard}
+        type="text"
+        initialValue=""
+        fieldType={activeField === "password" ? "password" : "text"}
+        onInput={(value) => {
+          setCredentials((prev) => ({
+            ...prev,
+            [activeField]: value,
+          }));
+        }}
+        onClose={() => {
+          setShowKeyboard(false);
+        }}
+        onSubmit={(value) => {
+          setCredentials((prev) => ({
+            ...prev,
+            [activeField]: value,
+          }));
+          setShowKeyboard(false);
+        }}
+      />
     </div>
   );
 };

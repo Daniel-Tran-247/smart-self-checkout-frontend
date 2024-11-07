@@ -3,18 +3,18 @@ import { motion, AnimatePresence } from "framer-motion";
 import { UserRound, X, AlertCircle } from "lucide-react";
 import { endpoint } from "../services/endpoint";
 
-const HelpRequestModal = ({ onClose }) => {
+const HelpRequestModal = ({ onClose }, message) => {
   const [isVisible, setIsVisible] = useState(true);
   const [error, setError] = useState(null);
 
-  useEffect(() => {
-    const timer = setTimeout(() => {
-      setIsVisible(false);
-      setTimeout(onClose, 300); // Wait for exit animation
-    }, 5000);
+  // useEffect(() => {
+  //   const timer = setTimeout(() => {
+  //     setIsVisible(false);
+  //     setTimeout(onClose, 300); // Wait for exit animation
+  //   }, 5000);
 
-    return () => clearTimeout(timer);
-  }, [onClose]);
+  //   return () => clearTimeout(timer);
+  // }, [onClose]);
 
   const handleSendHelpRequest = async () => {
     try {
@@ -122,7 +122,7 @@ const HelpRequestModal = ({ onClose }) => {
                 Help is on the way!
               </h3>
               <p className="text-gray-600 mb-4">
-                A staff member will be with you shortly.
+                {message ? "A staff member will be with you shortly." : message}
               </p>
 
               {/* Error message */}
