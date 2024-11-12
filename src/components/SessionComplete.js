@@ -2,13 +2,61 @@ import React, { useEffect } from "react";
 import { motion } from "framer-motion";
 import { ShoppingBag, CheckCircle2 } from "lucide-react";
 import { speak, messages } from "../utils/voiceAssistant";
+import { endpoint } from "../services/endpoint";
 
+const BACKEND_URL = endpoint;
+
+// SessionComplete.js
 const SessionComplete = ({ onStartNew }) => {
+  const handleStartNew = async () => {
+    try {
+      // Show loading state
+      const button = document.querySelector("#reset-button");
+      if (button) {
+        button.disabled = true;
+        button.textContent = "Resetting Session...";
+      }
+
+      // Call backend to reset session
+      const response = await fetch(`${BACKEND_URL}/reset-session`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+      });
+
+      if (!response.ok) {
+        throw new Error(`Server returned ${response.status}`);
+      }
+
+      const data = await response.json();
+      if (!data.success) {
+        throw new Error(data.error || "Reset failed");
+      }
+
+      // Wait a moment before triggering frontend reset
+      await new Promise((resolve) => setTimeout(resolve, 1000));
+
+      // Call the parent handler to reset frontend state
+      onStartNew();
+    } catch (error) {
+      console.error("Error resetting session:", error);
+      alert("Error resetting session. Please try again or refresh the page.");
+
+      // Reset button state
+      const button = document.querySelector("#reset-button");
+      if (button) {
+        button.disabled = false;
+        button.textContent = "Start New Session";
+      }
+    }
+  };
+
   useEffect(() => {
     speak(messages.thankYou);
     return () => window.speechSynthesis.cancel();
   }, []);
-  
+
   return (
     <div className="fixed inset-0 bg-white z-50 flex flex-col items-center justify-center text-center p-4">
       <motion.div
@@ -43,11 +91,13 @@ const SessionComplete = ({ onStartNew }) => {
         </div>
 
         <motion.button
+          id="reset-button"
           whileHover={{ scale: 1.05 }}
           whileTap={{ scale: 0.95 }}
-          onClick={onStartNew}
+          onClick={handleStartNew}
           className="px-8 py-4 bg-blue-500 text-white rounded-lg text-lg font-medium
-                   hover:bg-blue-600 transition-colors shadow-lg"
+                   hover:bg-blue-600 transition-colors shadow-lg disabled:opacity-50 
+                   disabled:cursor-not-allowed"
         >
           Start New Session
         </motion.button>

@@ -41,13 +41,7 @@ const LiveDetection = () => {
 
   const resetSession = async () => {
     try {
-      // First disconnect the socket
-      if (socketRef.current) {
-        socketRef.current.disconnect();
-        socketRef.current = null;
-      }
-
-      // Clear all frontend state immediately
+      // Clear all frontend state first
       setConfirmedObjects({});
       setUndeterminedObjects([]);
       setTrackedObjects([]);
@@ -62,27 +56,21 @@ const LiveDetection = () => {
       setIsScanningPaused(false);
       setFrameStatus({ is_empty: true, empty_confidence: 1.0 });
 
-      // Wait a moment before resetting
-      await new Promise((resolve) => setTimeout(resolve, 1000));
-
-      // Call backend to reset tracking state
-      const response = await fetch(`${BACKEND_URL}/reset-session`, {
-        method: "POST",
-      });
-
-      if (!response.ok) {
-        throw new Error("Failed to reset session on server");
+      // Clean up socket connection
+      if (socketRef.current) {
+        socketRef.current.disconnect();
+        socketRef.current = null;
       }
 
-      // Wait for backend reset to complete
-      await new Promise((resolve) => setTimeout(resolve, 2000));
+      // Wait a moment before establishing new connection
+      await new Promise((resolve) => setTimeout(resolve, 1000));
 
-      // Create new socket connection with better error handling
+      // Create new socket connection
       const newSocket = io(BACKEND_URL, {
         secure: true,
         rejectUnauthorized: false,
         transports: ["websocket"],
-        upgrade: false, // Disable transport upgrade
+        upgrade: false,
         reconnection: true,
         reconnectionAttempts: 5,
         reconnectionDelay: 1000,
@@ -101,30 +89,11 @@ const LiveDetection = () => {
         console.log("Socket connected successfully");
       });
 
-      newSocket.on("disconnect", (reason) => {
-        console.log("Socket disconnected:", reason);
-      });
-
-      // Wait for connection or timeout
-      await new Promise((resolve, reject) => {
-        const timeout = setTimeout(
-          () => reject(new Error("Connection timeout")),
-          5000
-        );
-        newSocket.on("connect", () => {
-          clearTimeout(timeout);
-          resolve();
-        });
-      });
-
       socketRef.current = newSocket;
       setIsScanningPaused(false);
     } catch (error) {
       console.error("Error resetting session:", error);
-      // Show more specific error message
-      alert(
-        `Error resetting session: ${error.message}. Please refresh the page and try again.`
-      );
+      alert("Error resetting session. Please refresh the page.");
     }
   };
 
