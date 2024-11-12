@@ -1,8 +1,14 @@
-import React from "react";
+import React, { useEffect } from "react";
 import { motion } from "framer-motion";
 import { ShoppingBag, CheckCircle2 } from "lucide-react";
+import { speak, messages } from "../utils/voiceAssistant";
 
 const SessionComplete = ({ onStartNew }) => {
+  useEffect(() => {
+    speak(messages.thankYou);
+    return () => window.speechSynthesis.cancel();
+  }, []);
+  
   return (
     <div className="fixed inset-0 bg-white z-50 flex flex-col items-center justify-center text-center p-4">
       <motion.div

@@ -4,6 +4,7 @@ import { CreditCard, X, QrCode, AlertCircle } from "lucide-react";
 import { endpoint } from "../services/endpoint";
 import HelpRequestModal from "./HelpRequestModal";
 import VirtualKeyboard from "./VirtualKeyboard";
+import { speak, messages } from "../utils/voiceAssistant";
 
 const BACKEND_URL = endpoint;
 const MAX_ATTEMPTS = 5;
@@ -47,6 +48,27 @@ const PaymentFlow = ({ cart, onSuccess, onCancel }) => {
 
   useEffect(() => {
     setError(""); // Clear error when stage changes
+  }, [stage]);
+
+  useEffect(() => {
+    if (stage === "tap") {
+      speak(messages.tapCard);
+    }
+    return () => window.speechSynthesis.cancel();
+  }, [stage]);
+
+  // In the stage === "pin" section:
+  useEffect(() => {
+    if (stage === "pin") {
+      speak(messages.enterPin);
+    }
+  }, [stage]);
+
+  // In the stage === "receipt" section:
+  useEffect(() => {
+    if (stage === "receipt") {
+      speak(messages.scanQRCode);
+    }
   }, [stage]);
 
   const handleCardTap = async () => {
@@ -163,7 +185,7 @@ const PaymentFlow = ({ cart, onSuccess, onCancel }) => {
           const receiptData = {
             items: Object.entries(cart).map(([name, item]) => ({
               name,
-              price: item.unit_price,
+              price: Number(item.unit_price) || 0,
               quantity: item.quantity,
             })),
             subtotal,
@@ -391,7 +413,19 @@ const PaymentFlow = ({ cart, onSuccess, onCancel }) => {
               to assist.
             </p>
             <button
-              onClick={onCancel}
+              onClick={() => {
+                // Send help request
+                fetch(`${BACKEND_URL}/send-help`, {
+                  method: "POST",
+                  headers: {
+                    "Content-Type": "application/json",
+                  },
+                  body: JSON.stringify({
+                    phoneNumber: "+16478650247", // Your staff notification number
+                  }),
+                });
+                onCancel();
+              }}
               className="w-full py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600"
             >
               OK

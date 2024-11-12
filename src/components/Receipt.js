@@ -1,6 +1,7 @@
 // src/components/Receipt.js
-import React from "react";
+import React, { useEffect } from "react";
 import { useParams, useLocation } from "react-router-dom";
+import { speak, messages } from "../utils/voiceAssistant";
 
 const Receipt = () => {
   const [receipt, setReceipt] = React.useState(null);
@@ -21,6 +22,13 @@ const Receipt = () => {
       console.error("Error parsing receipt data:", error);
     }
   }, [location.search]);
+
+  useEffect(() => {
+    if (receipt) {
+      speak(messages.scanQRCode);
+    }
+    return () => window.speechSynthesis.cancel();
+  }, [receipt]);
 
   if (!receipt) {
     return (

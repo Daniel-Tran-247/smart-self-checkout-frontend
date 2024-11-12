@@ -41,16 +41,13 @@ const LiveDetection = () => {
 
   const resetSession = async () => {
     try {
-      // Call backend to reset tracking state
-      const response = await fetch(`${BACKEND_URL}/reset-session`, {
-        method: "POST",
-      });
-
-      if (!response.ok) {
-        throw new Error("Failed to reset session on server");
+      // First disconnect the socket
+      if (socketRef.current) {
+        socketRef.current.disconnect();
+        socketRef.current = null;
       }
 
-      // Clear all frontend state
+      // Clear all frontend state immediately
       setConfirmedObjects({});
       setUndeterminedObjects([]);
       setTrackedObjects([]);
@@ -65,17 +62,69 @@ const LiveDetection = () => {
       setIsScanningPaused(false);
       setFrameStatus({ is_empty: true, empty_confidence: 1.0 });
 
-      // Reconnect socket for new session
-      if (socketRef.current) {
-        socketRef.current.disconnect();
-        // Small delay to ensure clean disconnect before reconnecting
-        setTimeout(() => {
-          socketRef.current.connect();
-        }, 500);
+      // Wait a moment before resetting
+      await new Promise((resolve) => setTimeout(resolve, 1000));
+
+      // Call backend to reset tracking state
+      const response = await fetch(`${BACKEND_URL}/reset-session`, {
+        method: "POST",
+      });
+
+      if (!response.ok) {
+        throw new Error("Failed to reset session on server");
       }
+
+      // Wait for backend reset to complete
+      await new Promise((resolve) => setTimeout(resolve, 2000));
+
+      // Create new socket connection with better error handling
+      const newSocket = io(BACKEND_URL, {
+        secure: true,
+        rejectUnauthorized: false,
+        transports: ["websocket"],
+        upgrade: false, // Disable transport upgrade
+        reconnection: true,
+        reconnectionAttempts: 5,
+        reconnectionDelay: 1000,
+        timeout: 60000,
+        pingTimeout: 60000,
+        pingInterval: 25000,
+      });
+
+      // Set up event handlers
+      newSocket.on("connect_error", (error) => {
+        console.error("Socket connection error:", error);
+        alert("Connection error. Please try again.");
+      });
+
+      newSocket.on("connect", () => {
+        console.log("Socket connected successfully");
+      });
+
+      newSocket.on("disconnect", (reason) => {
+        console.log("Socket disconnected:", reason);
+      });
+
+      // Wait for connection or timeout
+      await new Promise((resolve, reject) => {
+        const timeout = setTimeout(
+          () => reject(new Error("Connection timeout")),
+          5000
+        );
+        newSocket.on("connect", () => {
+          clearTimeout(timeout);
+          resolve();
+        });
+      });
+
+      socketRef.current = newSocket;
+      setIsScanningPaused(false);
     } catch (error) {
       console.error("Error resetting session:", error);
-      // You might want to show an error message to the user here
+      // Show more specific error message
+      alert(
+        `Error resetting session: ${error.message}. Please refresh the page and try again.`
+      );
     }
   };
 
@@ -608,9 +657,11 @@ const LiveDetection = () => {
                         >
                           <td className="p-2">
                             <img
-                              src={`${BACKEND_URL}/Assets/${item.image_path
-                                .split("/")
-                                .pop()}`}
+                              src={`${BACKEND_URL}/Assets/${
+                                item.image_path
+                                  ? item.image_path.split("/").pop()
+                                  : ""
+                              }`}
                               alt={itemName}
                               className="w-16 h-16 object-cover rounded-lg"
                             />
@@ -635,7 +686,8 @@ const LiveDetection = () => {
             </div>
             {isReviewing && (
               <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-                <div className="bg-white rounded-lg max-w-3xl w-full max-h-[90vh] overflow-y-auto m-4">
+                <div className="absolute inset-0 bg-gray-900/90" />
+                <div className="relative bg-white rounded-lg max-w-3xl w-full max-h-[90vh] overflow-y-auto m-4">
                   <CartReview
                     confirmedObjects={confirmedObjects}
                     onUpdateQuantity={handleQuantityUpdate}
@@ -660,9 +712,10 @@ const LiveDetection = () => {
               </div>
               <button
                 onClick={handleCheckout}
-                disabled={undeterminedObjects.length > 0}
+                disabled={Object.keys(confirmedObjects).length === 0}
                 className={`mt-4 w-full p-3 text-white font-bold rounded-lg transition-all duration-200 ${
-                  undeterminedObjects.length > 0
+                  (undeterminedObjects.length > 0) |
+                  (Object.keys(confirmedObjects).length === 0)
                     ? "bg-gray-400 cursor-not-allowed"
                     : "bg-blue-500 hover:bg-blue-600 active:bg-blue-700"
                 }`}

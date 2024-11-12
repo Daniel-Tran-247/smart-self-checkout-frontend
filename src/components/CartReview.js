@@ -72,9 +72,9 @@ const ItemSelector = ({ onSelect, onClose, storeItems }) => {
               }`}
             >
               <img
-                src={`${BACKEND_URL}/Assets/${item.image_path
-                  .split("/")
-                  .pop()}`}
+                src={`${BACKEND_URL}/Assets/${
+                  item.image_path ? item.image_path.split("/").pop() : ""
+                }`}
                 alt={item.name}
                 className="w-full h-32 object-cover rounded-lg mb-2"
               />
@@ -150,6 +150,16 @@ const CartReview = ({
   const [hasEdits, setHasEdits] = useState(false);
   const [showHelpModal, setShowHelpModal] = useState(false);
   const [showPayment, setShowPayment] = useState(false);
+
+  useEffect(() => {
+    // Show warning when component mounts
+    const handleBeforeUnload = (e) => {
+      e.preventDefault();
+      e.returnValue = "";
+    };
+    window.addEventListener("beforeunload", handleBeforeUnload);
+    return () => window.removeEventListener("beforeunload", handleBeforeUnload);
+  }, []);
 
   useEffect(() => {
     const originals = {};
@@ -265,6 +275,26 @@ const CartReview = ({
 
   const handleConfirm = () => {
     if (!isEditing) {
+      // Validate all items have valid prices before proceeding
+      const hasInvalidItems = Object.values(modifiedCart).some(
+        (item) => typeof item.unit_price !== "number" || isNaN(item.unit_price)
+      );
+
+      if (hasInvalidItems) {
+        setAlertConfig({
+          title: "Invalid Items",
+          description:
+            "Some items in your cart have invalid prices. Please contact staff for assistance.",
+          showHelp: true,
+          action: () => {
+            setShowHelpModal(true);
+            setShowAlert(false);
+          },
+        });
+        setShowAlert(true);
+        return;
+      }
+
       setShowPayment(true);
     }
   };
@@ -342,16 +372,16 @@ const CartReview = ({
           >
             <div className="flex items-center space-x-4">
               <img
-                src={`${BACKEND_URL}/Assets/${item.image_path
-                  .split("/")
-                  .pop()}`}
+                src={`${BACKEND_URL}/Assets/${
+                  item.image_path ? item.image_path.split("/").pop() : ""
+                }`}
                 alt={itemName}
                 className="w-16 h-16 object-cover rounded-lg"
               />
               <div>
                 <h3 className="font-medium text-gray-800">{itemName}</h3>
                 <p className="text-gray-600">
-                  ${item.unit_price.toFixed(2)} each
+                  ${parseFloat(item.unit_price).toFixed(2)} each
                 </p>
               </div>
             </div>
@@ -409,24 +439,21 @@ const CartReview = ({
             .toFixed(2)}
         </div>
         <div className="flex gap-3">
-          {!hasEdits && ( // Only show cancel if no edits made
-            <button
-              onClick={onCancel}
-              className="px-6 py-3 rounded-lg bg-gray-100 text-gray-700 hover:bg-gray-200"
-            >
-              Back to Scanning
-            </button>
-          )}
+          {!hasEdits ? ( // Replace the cancel button with info text
+            <div className="px-6 py-3 text-gray-500 text-sm italic">
+              Complete this transaction to start a new scanning session
+            </div>
+          ) : null}
           <button
             onClick={handleConfirm}
-            disabled={isEditing}
+            disabled={isEditing || Object.keys(modifiedCart).length === 0}
             className={`px-6 py-3 rounded-lg ${
-              isEditing
+              isEditing || Object.keys(modifiedCart).length === 0
                 ? "bg-gray-300 cursor-not-allowed"
                 : "bg-green-500 hover:bg-green-600"
             } text-white transition-colors`}
           >
-            {isEditing ? "Finish editing to continue" : "Confirm and Pay"}
+            Confirm and Pay
           </button>
         </div>
       </div>

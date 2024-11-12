@@ -1,7 +1,8 @@
 import { HelpCircle, LogIn, LogOut, UserCircle } from "lucide-react";
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import Draggable from "react-draggable";
 import HelpRequestModal from "./HelpRequestModal";
+import { speak, messages } from "../utils/voiceAssistant";
 
 export const DraggableHelpButton = ({ onClick }) => {
   const [showHelpModal, setShowHelpModal] = useState(false);
@@ -101,32 +102,36 @@ export const StaffLoginMenu = ({ isStaffMode, onLoginClick, onLogout }) => {
   );
 };
 
-export const ReviewInstructions = ({ onClose }) => (
-  <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-    <div className="bg-white rounded-lg p-6 max-w-md w-full m-4">
-      <h3 className="text-xl font-bold mb-4">Review Your Cart</h3>
-      <p className="text-gray-600 mb-6">
-        <strong>Note:</strong> You can return to scanning unless you make
-        quantity adjustments. Once you modify any quantities, you'll need to
-        complete this transaction before starting a new scan.
-      </p>
-      <div className="flex justify-end space-x-3">
-        <button
-          onClick={() => onClose(false)}
-          className="px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200"
-        >
-          Keep Scanning
-        </button>
-        <button
-          onClick={() => onClose(true)}
-          className="px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600"
-        >
-          Review Cart
-        </button>
+export const ReviewInstructions = ({ onClose }) => {
+  useEffect(() => {
+    speak(messages.reviewInstructions);
+    return () => window.speechSynthesis.cancel();
+  }, []);
+  return (
+    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+      <div className="bg-white rounded-lg p-6 max-w-md w-full m-4">
+        <h3 className="text-xl font-bold mb-4">Ready to Checkout?</h3>
+        <p className="text-gray-600 mb-6">
+          <strong>Note:</strong> {messages.reviewInstructions}
+        </p>
+        <div className="flex justify-end space-x-3">
+          <button
+            onClick={() => onClose(false)}
+            className="px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200"
+          >
+            Keep Scanning
+          </button>
+          <button
+            onClick={() => onClose(true)}
+            className="px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600"
+          >
+            Review Cart
+          </button>
+        </div>
       </div>
     </div>
-  </div>
-);
+  );
+};
 
 export default {
   ReviewInstructions,
