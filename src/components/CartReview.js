@@ -13,6 +13,7 @@ import StaffLogin from "./StaffLogin";
 import { endpoint } from "../services/endpoint";
 import HelpRequestModal from "./HelpRequestModal";
 import PaymentFlow from "./Payment";
+import VirtualKeyboard from "./VirtualKeyboard";
 
 const BACKEND_URL = endpoint;
 const PRICE_REDUCTION_LIMIT = 5.0;
@@ -21,6 +22,7 @@ const ItemSelector = ({ onSelect, onClose, storeItems }) => {
   const [searchTerm, setSearchTerm] = useState("");
   const [quantity, setQuantity] = useState(1);
   const [selectedItem, setSelectedItem] = useState(null);
+  const [showKeyboard, setShowKeyboard] = useState(false);
 
   const filteredItems =
     storeItems?.filter((item) =>
@@ -55,7 +57,8 @@ const ItemSelector = ({ onSelect, onClose, storeItems }) => {
             type="text"
             placeholder="Search items..."
             value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
+            readOnly
+            onClick={() => setShowKeyboard(true)}
             className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
           />
         </div>
@@ -123,6 +126,19 @@ const ItemSelector = ({ onSelect, onClose, storeItems }) => {
             </button>
           </div>
         )}
+
+        <VirtualKeyboard
+          show={showKeyboard}
+          type="text"
+          maxLength={30}
+          initialValue={searchTerm}
+          onInput={(value) => setSearchTerm(value)}
+          onClose={() => setShowKeyboard(false)}
+          onSubmit={(value) => {
+            setSearchTerm(value);
+            setShowKeyboard(false);
+          }}
+        />
       </div>
     </div>
   );
