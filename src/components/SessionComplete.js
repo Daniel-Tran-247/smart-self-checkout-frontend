@@ -1,4 +1,4 @@
-import React, { useEffect } from "react";
+import React, { useEffect, useState } from "react";
 import { motion } from "framer-motion";
 import { ShoppingBag, CheckCircle2 } from "lucide-react";
 import { speak, messages } from "../utils/voiceAssistant";
@@ -8,6 +8,11 @@ const BACKEND_URL = endpoint;
 
 // SessionComplete.js
 const SessionComplete = ({ onStartNew }) => {
+  useEffect(() => {
+    speak(messages.thankYou);
+    return () => window.speechSynthesis.cancel();
+  }, []);
+
   const handleStartNew = async () => {
     try {
       // Show loading state
@@ -34,6 +39,8 @@ const SessionComplete = ({ onStartNew }) => {
         throw new Error(data.error || "Reset failed");
       }
 
+      sessionStorage.setItem('forceInstructionPage', 'true');
+
       // Wait a moment before triggering frontend reset
       await new Promise((resolve) => setTimeout(resolve, 1000));
 
@@ -51,11 +58,6 @@ const SessionComplete = ({ onStartNew }) => {
       }
     }
   };
-
-  useEffect(() => {
-    speak(messages.thankYou);
-    return () => window.speechSynthesis.cancel();
-  }, []);
 
   return (
     <div className="fixed inset-0 bg-white z-50 flex flex-col items-center justify-center text-center p-4">

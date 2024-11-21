@@ -9,6 +9,7 @@ import {
 } from "./components/StaffLoginButton";
 import { endpoint } from "./services/endpoint";
 import SessionComplete from "./components/SessionComplete";
+import AnimationIntruction from "./components/AnimationInstruction";
 
 const BACKEND_URL = endpoint;
 
@@ -38,6 +39,16 @@ const LiveDetection = () => {
   const [showLiveDetection, setShowLiveDetection] = useState(true);
   const [showSessionComplete, setShowSessionComplete] = useState(false);
   const [showReviewInstructions, setShowReviewInstructions] = useState(false);
+  const [showInstructionPage, setShowInstructionPage] = useState(
+    !sessionStorage.getItem("instructionShown") ||
+      sessionStorage.getItem("forceInstructionPage") === "true"
+  );
+
+  const handleProceedToScanning = useCallback(() => {
+    setShowInstructionPage(false);
+    sessionStorage.setItem("instructionShown", "true");
+    sessionStorage.removeItem("forceInstructionPage");
+  }, []);
 
   const resetSession = async () => {
     try {
@@ -55,6 +66,8 @@ const LiveDetection = () => {
       setIsReviewing(false);
       setIsScanningPaused(false);
       setFrameStatus({ is_empty: true, empty_confidence: 1.0 });
+      sessionStorage.setItem("forceInstructionPage", "true");
+      setShowInstructionPage(true);
 
       // Clean up socket connection
       if (socketRef.current) {
@@ -576,127 +589,131 @@ const LiveDetection = () => {
 
   return (
     <div className="h-screen overflow-hidden relative">
-      <div className="flex flex-col h-screen bg-gray-100">
-        <Header
-          isStaffMode={isStaffMode}
-          onStaffLogin={handleStaffLogin}
-          onStaffLogout={handleStaffLogout}
-          onAddItem={handleStaffAddItem}
-          storeItems={storeItems}
-        />
-        <div className="bg-yellow-100 border-l-4 border-yellow-500 text-yellow-700 p-4 mb-4">
-          <p className="font-bold">Instructions:</p>
-          <p>{instruction}</p>
-        </div>
-        <div className="flex flex-grow">
-          <div className="w-1/2 p-4 flex flex-col">
-            <h2 className="text-2xl font-bold mb-4">Live Detection</h2>
-            <div className="relative flex-grow">
-              <canvas
-                ref={canvasRef}
-                className="absolute top-0 left-0 w-full h-full object-contain"
-              />
-            </div>
-            <div className="mt-2">FPS: {fps}</div>
+      {showInstructionPage ? (
+        <AnimationIntruction onProceed={handleProceedToScanning} />
+      ) : (
+        <div className="flex flex-col h-screen bg-gray-100">
+          <Header
+            isStaffMode={isStaffMode}
+            onStaffLogin={handleStaffLogin}
+            onStaffLogout={handleStaffLogout}
+            onAddItem={handleStaffAddItem}
+            storeItems={storeItems}
+          />
+          <div className="bg-yellow-100 border-l-4 border-yellow-500 text-yellow-700 p-4 mb-4">
+            <p className="font-bold">Instructions:</p>
+            <p>{instruction}</p>
           </div>
-          <div className="w-1/2 p-4 flex flex-col">
-            <h2 className="text-2xl font-bold mb-4">Shopping Cart</h2>
-            <div className="flex-grow overflow-auto">
-              <table className="w-full border-collapse">
-                <thead>
-                  <tr className="bg-gray-200">
-                    <th className="p-2">Image</th>
-                    <th className="p-2">Item Name</th>
-                    <th className="p-2">Quantity</th>
-                    <th className="p-2">Unit Price</th>
-                    <th className="p-2">Total Price</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  <AnimatePresence>
-                    {Object.entries(confirmedObjects).map(
-                      ([itemName, item]) => (
-                        <motion.tr
-                          key={itemName}
-                          initial={{ opacity: 0, y: -20 }}
-                          animate={{ opacity: 1, y: 0 }}
-                          exit={{ opacity: 0, y: 20 }}
-                          transition={{ duration: 0.3 }}
-                          className="border-b"
-                        >
-                          <td className="p-2">
-                            <img
-                              src={`${BACKEND_URL}/Assets/${
-                                item.image_path
-                                  ? item.image_path.split("/").pop()
-                                  : ""
-                              }`}
-                              alt={itemName}
-                              className="w-16 h-16 object-cover rounded-lg"
-                            />
-                          </td>
-                          <td className="p-2 font-medium">{itemName}</td>
-                          <td className="p-2 text-center">{item.quantity}</td>
-                          <td className="p-2 text-right">
-                            ${item.unit_price?.toFixed(2) || "N/A"}
-                          </td>
-                          <td className="p-2 text-right font-medium">
-                            $
-                            {(item.quantity * (item.unit_price || 0)).toFixed(
-                              2
-                            )}
-                          </td>
-                        </motion.tr>
-                      )
-                    )}
-                  </AnimatePresence>
-                </tbody>
-              </table>
+          <div className="flex flex-grow">
+            <div className="w-1/2 p-4 flex flex-col">
+              <h2 className="text-2xl font-bold mb-4">Live Detection</h2>
+              <div className="relative flex-grow">
+                <canvas
+                  ref={canvasRef}
+                  className="absolute top-0 left-0 w-full h-full object-contain"
+                />
+              </div>
+              <div className="mt-2">FPS: {fps}</div>
             </div>
-            {isReviewing && (
-              <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-                <div className="absolute inset-0 bg-gray-900/90" />
-                <div className="relative bg-white rounded-lg max-w-3xl w-full max-h-[90vh] overflow-y-auto m-4">
-                  <CartReview
-                    confirmedObjects={confirmedObjects}
-                    onUpdateQuantity={handleQuantityUpdate}
-                    onRequestHelp={handleRequestHelp}
-                    onConfirm={handleConfirmCart}
-                    onCancel={handleReviewCancel} // Add this
-                    isStaffMode={isStaffMode}
-                    storeItems={storeItems}
-                    onStaffLogin={handleStaffLogin}
-                    onStaffLogout={handleStaffLogout}
-                  />
+            <div className="w-1/2 p-4 flex flex-col">
+              <h2 className="text-2xl font-bold mb-4">Shopping Cart</h2>
+              <div className="flex-grow overflow-auto">
+                <table className="w-full border-collapse">
+                  <thead>
+                    <tr className="bg-gray-200">
+                      <th className="p-2">Image</th>
+                      <th className="p-2">Item Name</th>
+                      <th className="p-2">Quantity</th>
+                      <th className="p-2">Unit Price</th>
+                      <th className="p-2">Total Price</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <AnimatePresence>
+                      {Object.entries(confirmedObjects).map(
+                        ([itemName, item]) => (
+                          <motion.tr
+                            key={itemName}
+                            initial={{ opacity: 0, y: -20 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            exit={{ opacity: 0, y: 20 }}
+                            transition={{ duration: 0.3 }}
+                            className="border-b"
+                          >
+                            <td className="p-2">
+                              <img
+                                src={`${BACKEND_URL}/Assets/${
+                                  item.image_path
+                                    ? item.image_path.split("/").pop()
+                                    : ""
+                                }`}
+                                alt={itemName}
+                                className="w-16 h-16 object-cover rounded-lg"
+                              />
+                            </td>
+                            <td className="p-2 font-medium">{itemName}</td>
+                            <td className="p-2 text-center">{item.quantity}</td>
+                            <td className="p-2 text-right">
+                              ${item.unit_price?.toFixed(2) || "N/A"}
+                            </td>
+                            <td className="p-2 text-right font-medium">
+                              $
+                              {(item.quantity * (item.unit_price || 0)).toFixed(
+                                2
+                              )}
+                            </td>
+                          </motion.tr>
+                        )
+                      )}
+                    </AnimatePresence>
+                  </tbody>
+                </table>
+              </div>
+              {isReviewing && (
+                <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+                  <div className="absolute inset-0 bg-gray-900/90" />
+                  <div className="relative bg-white rounded-lg max-w-3xl w-full max-h-[90vh] overflow-y-auto m-4">
+                    <CartReview
+                      confirmedObjects={confirmedObjects}
+                      onUpdateQuantity={handleQuantityUpdate}
+                      onRequestHelp={handleRequestHelp}
+                      onConfirm={handleConfirmCart}
+                      onCancel={handleReviewCancel} // Add this
+                      isStaffMode={isStaffMode}
+                      storeItems={storeItems}
+                      onStaffLogin={handleStaffLogin}
+                      onStaffLogout={handleStaffLogout}
+                    />
+                  </div>
                 </div>
-              </div>
-            )}
+              )}
 
-            {showReviewInstructions && (
-              <ReviewInstructions onClose={handleReviewInstructions} />
-            )}
-            <div className="mt-4 p-4 bg-white rounded-lg shadow-sm">
-              <div className="text-xl font-bold text-right">
-                Total: ${totalPrice.toFixed(2)}
+              {showReviewInstructions && (
+                <ReviewInstructions onClose={handleReviewInstructions} />
+              )}
+              <div className="mt-4 p-4 bg-white rounded-lg shadow-sm">
+                <div className="text-xl font-bold text-right">
+                  Total: ${totalPrice.toFixed(2)}
+                </div>
+                <button
+                  onClick={handleCheckout}
+                  disabled={Object.keys(confirmedObjects).length === 0}
+                  className={`mt-4 w-full p-3 text-white font-bold rounded-lg transition-all duration-200 ${
+                    (undeterminedObjects.length > 0) |
+                    (Object.keys(confirmedObjects).length === 0)
+                      ? "bg-gray-400 cursor-not-allowed"
+                      : "bg-blue-500 hover:bg-blue-600 active:bg-blue-700"
+                  }`}
+                >
+                  {undeterminedObjects.length > 0
+                    ? "Please wait for all items to be confirmed"
+                    : "Proceed to Checkout"}
+                </button>
               </div>
-              <button
-                onClick={handleCheckout}
-                disabled={Object.keys(confirmedObjects).length === 0}
-                className={`mt-4 w-full p-3 text-white font-bold rounded-lg transition-all duration-200 ${
-                  (undeterminedObjects.length > 0) |
-                  (Object.keys(confirmedObjects).length === 0)
-                    ? "bg-gray-400 cursor-not-allowed"
-                    : "bg-blue-500 hover:bg-blue-600 active:bg-blue-700"
-                }`}
-              >
-                {undeterminedObjects.length > 0
-                  ? "Please wait for all items to be confirmed"
-                  : "Proceed to Checkout"}
-              </button>
             </div>
           </div>
         </div>
-      </div>
+      )}
       <DraggableHelpButton onClick={handleRequestHelp} />
       {showSessionComplete && <SessionComplete onStartNew={resetSession} />}
     </div>
